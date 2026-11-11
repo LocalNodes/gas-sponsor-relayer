@@ -1,0 +1,101 @@
+# Builds the relayer image and publishes it to GitHub Container Registry.
+#
+# Runs on a push to main and by hand. It never runs for pull requests, so code from a fork
+# cannot reach the registry token. The unit suite runs first; if it fails, nothing is built.
+# Every action is pinned by commit SHA (the release tag is in the comment).
+#
+# Each run pushes two tags: the commit SHA (fixed) and main (moves). Deployments pin the
+# image by the digest this run prints in its summary, not by a tag.
+name: image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/localnodes/gas-sponsor-relayer
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      # .npmrc sets ignore-scripts=true; the flag repeats it so no install script runs.
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  image:
+    needs: test
+    # A hand run from another branch must not move the main tag.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.licenses=GPL-2.0-or-later" \
+            -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:main" .
+
+      # The image must start keyless (WEB3_ENABLED unset) and answer /healthz before it is pushed.
+      - name: Start check
+        run: |
+          docker run -d --name relayer-check "${IMAGE}:${GITHUB_SHA}"
+          for i in $(seq 1 30); do
+            if docker exec relayer-check wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
+              echo "healthz answered after ${i}s"
+              docker rm -f relayer-check >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs relayer-check
+          docker rm -f relayer-check >/dev/null
+          echo "::error::the image did not answer /healthz within 30 seconds"
+          exit 1
+
+      - name: Log in to GitHub Container Registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push
+        run: |
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:main"
+          DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "${IMAGE}:${GITHUB_SHA}")"
+          echo "Pushed ${DIGEST}"
+          {
+            echo "### Image"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Pin by digest: \`${DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out
+        if: always()
+        run: docker logout ghcr.io
