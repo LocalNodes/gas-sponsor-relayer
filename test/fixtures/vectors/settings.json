@@ -1,0 +1,75 @@
+{
+  "input": {
+    "name": "Gov Vectors",
+    "network": 11155111,
+    "hats": "0x3bc1A0Ad72417f2d411118085256fC53CBdDd137",
+    "memberHatId": "3758.1",
+    "proposerHatId": "3758.2",
+    "period": 86400,
+    "quorum": 3,
+    "safe": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+    "realityAddress": "0x4d4F4D4F4d4f4D4f4d4F4d4F4D4F4D4f4d4F4d4F"
+  },
+  "settings": {
+    "name": "Gov Vectors",
+    "network": "11155111",
+    "symbol": "VOTE",
+    "admins": [],
+    "moderators": [],
+    "members": [],
+    "strategies": [
+      {
+        "name": "hats-protocol-hat-id",
+        "network": "11155111",
+        "params": {
+          "address": "0x3bc1A0Ad72417f2d411118085256fC53CBdDd137",
+          "hatId": "3758.1"
+        }
+      }
+    ],
+    "validation": {
+      "name": "basic",
+      "params": {
+        "minScore": 1,
+        "strategies": [
+          {
+            "name": "hats-protocol-hat-id",
+            "network": "11155111",
+            "params": {
+              "address": "0x3bc1A0Ad72417f2d411118085256fC53CBdDd137",
+              "hatId": "3758.2"
+            }
+          }
+        ]
+      }
+    },
+    "voting": {
+      "type": "basic",
+      "period": 86400,
+      "quorum": 3,
+      "delay": 0,
+      "privacy": ""
+    },
+    "filters": {
+      "onlyMembers": false
+    },
+    "plugins": {
+      "safeSnap": {
+        "safes": [
+          {
+            "network": "11155111",
+            "realityAddress": "0x4d4F4D4F4d4f4D4f4d4F4d4F4D4F4D4f4d4F4d4F"
+          }
+        ]
+      }
+    },
+    "treasuries": [
+      {
+        "name": "Group fund",
+        "address": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "network": "11155111"
+      }
+    ]
+  },
+  "serialized": "{\"name\":\"Gov Vectors\",\"network\":\"11155111\",\"symbol\":\"VOTE\",\"admins\":[],\"moderators\":[],\"members\":[],\"strategies\":[{\"name\":\"hats-protocol-hat-id\",\"network\":\"11155111\",\"params\":{\"address\":\"0x3bc1A0Ad72417f2d411118085256fC53CBdDd137\",\"hatId\":\"3758.1\"}}],\"validation\":{\"name\":\"basic\",\"params\":{\"minScore\":1,\"strategies\":[{\"name\":\"hats-protocol-hat-id\",\"network\":\"11155111\",\"params\":{\"address\":\"0x3bc1A0Ad72417f2d411118085256fC53CBdDd137\",\"hatId\":\"3758.2\"}}]}},\"voting\":{\"type\":\"basic\",\"period\":86400,\"quorum\":3,\"delay\":0,\"privacy\":\"\"},\"filters\":{\"onlyMembers\":false},\"plugins\":{\"safeSnap\":{\"safes\":[{\"network\":\"11155111\",\"realityAddress\":\"0x4d4F4D4F4d4f4D4f4d4F4d4F4D4F4D4f4d4F4d4F\"}]}},\"treasuries\":[{\"name\":\"Group fund\",\"address\":\"0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE\",\"network\":\"11155111\"}]}"
+}

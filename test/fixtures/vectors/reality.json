@@ -1,0 +1,270 @@
+{
+  "chainId": 11155111,
+  "factory": "0x000000000000aDdB49795b0f9bA5BC298cDda236",
+  "mastercopy": "0x4e35DA39Fa5893a70A40Ce964F993d891E607cC0",
+  "domainTypehash": "0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218",
+  "transactionTypehash": "0x72e9670a7ee00f5fbf1049b8c38e3f22fab7e9b85029e85cf9412f17fdd5c2ad",
+  "questionSeparator": "U+241F (bytes3 0xe2909f)",
+  "selectors": {
+    "addProposal": {
+      "signature": "addProposal(string,bytes32[])",
+      "selector": "0x8dcd2661"
+    },
+    "executeProposalWithIndex": {
+      "signature": "executeProposalWithIndex(string,bytes32[],address,uint256,bytes,uint8,uint256)",
+      "selector": "0x14604b8c"
+    },
+    "submitAnswer": {
+      "signature": "submitAnswer(bytes32,bytes32,uint256)",
+      "selector": "0x77f325df"
+    },
+    "claimWinnings": {
+      "signature": "claimWinnings(bytes32,bytes32[],address[],uint256[],bytes32[])",
+      "selector": "0x1101a0fd"
+    },
+    "withdraw": {
+      "signature": "withdraw()",
+      "selector": "0x3ccfd60b"
+    },
+    "createTemplate": {
+      "signature": "createTemplate(string)",
+      "selector": "0x83bf4609"
+    },
+    "getTransactionHash": {
+      "signature": "getTransactionHash(address,uint256,bytes,uint8,uint256)",
+      "selector": "0x2b500041"
+    },
+    "buildQuestion": {
+      "signature": "buildQuestion(string,bytes32[])",
+      "selector": "0x39eafa6f"
+    },
+    "getQuestionId": {
+      "signature": "getQuestionId(string,uint256)",
+      "selector": "0xcc3b43b1"
+    }
+  },
+  "cases": [
+    {
+      "name": "timeout 3600 s",
+      "params": {
+        "owner": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "avatar": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "target": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "oracle": "0xaf33DcB6E8c5c4D9dDF579f53031b514d19449CA",
+        "cooldown": 300,
+        "expiration": 0,
+        "bond": "1000000000000000",
+        "templateId": 7,
+        "arbitrator": "0x50A7485f583273A4e5D341a25E4555D3C5A810dE",
+        "timeout": 3600
+      },
+      "saltNonce": 1,
+      "initializer": "0xa4f9edbf000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001400000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe0000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe0000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe000000000000000000000000af33dcb6e8c5c4d9ddf579f53031b514d19449ca0000000000000000000000000000000000000000000000000000000000000e10000000000000000000000000000000000000000000000000000000000000012c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000700000000000000000000000050a7485f583273a4e5d341a25e4555d3c5a810de",
+      "initializerSelector": "0xa4f9edbf",
+      "predictedModule": "0xBD42b05fb3C3b23f030bA94f8d17fe6D780e02da",
+      "txs": [
+        {
+          "label": "native payment",
+          "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+          "value": "10000000000000000",
+          "data": "0x",
+          "operation": 0,
+          "nonce": 0,
+          "txHash": "0x660349197658905eb2595c818986e3f751696cb5ac1850bb66270783f9145a18"
+        },
+        {
+          "label": "ERC-20 transfer",
+          "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+          "value": "0",
+          "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+          "operation": 0,
+          "nonce": 0,
+          "txHash": "0xc66eb3b16f9b3125acfbc2d68a1fa757f4d6bbcfd6a70deabb908259c9c8ab5e"
+        },
+        {
+          "label": "native payment",
+          "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+          "value": "10000000000000000",
+          "data": "0x",
+          "operation": 0,
+          "nonce": 1,
+          "txHash": "0x70a2919f02e3d8b81203a26bd6706b439b768e3e0fb7ec287d0b3094db681ffb"
+        },
+        {
+          "label": "ERC-20 transfer",
+          "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+          "value": "0",
+          "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+          "operation": 0,
+          "nonce": 1,
+          "txHash": "0x9ad6bd34a880d5d0a575233868800af289f08fa50ff5ffc7707bc7d72eb71e34"
+        }
+      ],
+      "proposals": [
+        {
+          "name": "single native payment",
+          "txHashes": [
+            "0x660349197658905eb2595c818986e3f751696cb5ac1850bb66270783f9145a18"
+          ],
+          "txs": [
+            {
+              "label": "native payment",
+              "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+              "value": "10000000000000000",
+              "data": "0x",
+              "operation": 0,
+              "nonce": 0,
+              "txHash": "0x660349197658905eb2595c818986e3f751696cb5ac1850bb66270783f9145a18"
+            }
+          ],
+          "proposalId": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "txHashesPackedKeccak": "0x8396077dce5d4ce16d90948a04bda89b56d55a79340707604bffbe017c6848a7",
+          "question": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd␟8396077dce5d4ce16d90948a04bda89b56d55a79340707604bffbe017c6848a7",
+          "questionId": "0x2f454b8cd2545b9d3581a2bea986a183a380d114c8f3f6ab27005cde995c39bd"
+        },
+        {
+          "name": "native payment then ERC-20 transfer",
+          "txHashes": [
+            "0x660349197658905eb2595c818986e3f751696cb5ac1850bb66270783f9145a18",
+            "0x9ad6bd34a880d5d0a575233868800af289f08fa50ff5ffc7707bc7d72eb71e34"
+          ],
+          "txs": [
+            {
+              "label": "native payment",
+              "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+              "value": "10000000000000000",
+              "data": "0x",
+              "operation": 0,
+              "nonce": 0,
+              "txHash": "0x660349197658905eb2595c818986e3f751696cb5ac1850bb66270783f9145a18"
+            },
+            {
+              "label": "ERC-20 transfer",
+              "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+              "value": "0",
+              "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+              "operation": 0,
+              "nonce": 1,
+              "txHash": "0x9ad6bd34a880d5d0a575233868800af289f08fa50ff5ffc7707bc7d72eb71e34"
+            }
+          ],
+          "proposalId": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "txHashesPackedKeccak": "0x8817f7469d283290e125eefb6e76826489e9ec1264c1a811627d38abbf3db83e",
+          "question": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd␟8817f7469d283290e125eefb6e76826489e9ec1264c1a811627d38abbf3db83e",
+          "questionId": "0x5cfd14ed51c2540fd0fceb8518992943f4a73baa2e08ac4b6e20183d31e3266c"
+        }
+      ]
+    },
+    {
+      "name": "timeout 600 s (testnet recommendation)",
+      "params": {
+        "owner": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "avatar": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "target": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+        "oracle": "0xaf33DcB6E8c5c4D9dDF579f53031b514d19449CA",
+        "cooldown": 300,
+        "expiration": 0,
+        "bond": "1000000000000000",
+        "templateId": 7,
+        "arbitrator": "0x50A7485f583273A4e5D341a25E4555D3C5A810dE",
+        "timeout": 600
+      },
+      "saltNonce": 2,
+      "initializer": "0xa4f9edbf000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001400000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe0000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe0000000000000000000000005afe5afe5afe5afe5afe5afe5afe5afe5afe5afe000000000000000000000000af33dcb6e8c5c4d9ddf579f53031b514d19449ca0000000000000000000000000000000000000000000000000000000000000258000000000000000000000000000000000000000000000000000000000000012c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000038d7ea4c68000000000000000000000000000000000000000000000000000000000000000000700000000000000000000000050a7485f583273a4e5d341a25e4555d3c5a810de",
+      "initializerSelector": "0xa4f9edbf",
+      "predictedModule": "0x14BFCcF22062F9a98167f11042f49d7EF770B8a0",
+      "txs": [
+        {
+          "label": "native payment",
+          "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+          "value": "10000000000000000",
+          "data": "0x",
+          "operation": 0,
+          "nonce": 0,
+          "txHash": "0xc104587da91e2c616cdd4353f0a1e4f1a9e7712cc9e8c30b451d882b9a9c1d56"
+        },
+        {
+          "label": "ERC-20 transfer",
+          "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+          "value": "0",
+          "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+          "operation": 0,
+          "nonce": 0,
+          "txHash": "0x68b5415269d569f81c0145e891694fd69c1d5054af929c6f0ee4fca1d46ccd12"
+        },
+        {
+          "label": "native payment",
+          "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+          "value": "10000000000000000",
+          "data": "0x",
+          "operation": 0,
+          "nonce": 1,
+          "txHash": "0x36259cc30aaa1e6cd09c35a10e6068878af71c66994ca511e3171c93569b88d9"
+        },
+        {
+          "label": "ERC-20 transfer",
+          "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+          "value": "0",
+          "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+          "operation": 0,
+          "nonce": 1,
+          "txHash": "0xd4a268bac105be73e451f00eedb9a6ee7aebef0c5bab7d198296e4a59bd5ae06"
+        }
+      ],
+      "proposals": [
+        {
+          "name": "single native payment",
+          "txHashes": [
+            "0xc104587da91e2c616cdd4353f0a1e4f1a9e7712cc9e8c30b451d882b9a9c1d56"
+          ],
+          "txs": [
+            {
+              "label": "native payment",
+              "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+              "value": "10000000000000000",
+              "data": "0x",
+              "operation": 0,
+              "nonce": 0,
+              "txHash": "0xc104587da91e2c616cdd4353f0a1e4f1a9e7712cc9e8c30b451d882b9a9c1d56"
+            }
+          ],
+          "proposalId": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "txHashesPackedKeccak": "0x578dcebee0dbe8c0ab56bfd65f8b61e1162e575585b79738bfe806550ed60273",
+          "question": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd␟578dcebee0dbe8c0ab56bfd65f8b61e1162e575585b79738bfe806550ed60273",
+          "questionId": "0x160fa5a404d62342dfcfb885c72773c921b6032f5567be596e89c4b605c7df8a"
+        },
+        {
+          "name": "native payment then ERC-20 transfer",
+          "txHashes": [
+            "0xc104587da91e2c616cdd4353f0a1e4f1a9e7712cc9e8c30b451d882b9a9c1d56",
+            "0xd4a268bac105be73e451f00eedb9a6ee7aebef0c5bab7d198296e4a59bd5ae06"
+          ],
+          "txs": [
+            {
+              "label": "native payment",
+              "to": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+              "value": "10000000000000000",
+              "data": "0x",
+              "operation": 0,
+              "nonce": 0,
+              "txHash": "0xc104587da91e2c616cdd4353f0a1e4f1a9e7712cc9e8c30b451d882b9a9c1d56"
+            },
+            {
+              "label": "ERC-20 transfer",
+              "to": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+              "value": "0",
+              "data": "0xa9059cbb00000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a6500000000000000000000000000000000000000000000000000000000002625a0",
+              "operation": 0,
+              "nonce": 1,
+              "txHash": "0xd4a268bac105be73e451f00eedb9a6ee7aebef0c5bab7d198296e4a59bd5ae06"
+            }
+          ],
+          "proposalId": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "txHashesPackedKeccak": "0x7e38eba038f25d5aa1a4de7bf44fb2ee2903b4ab349d96c5d824a195e574a403",
+          "question": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd␟7e38eba038f25d5aa1a4de7bf44fb2ee2903b4ab349d96c5d824a195e574a403",
+          "questionId": "0xfcb1af09b91fb19ea3be237a42e1939f3942c4ba82831c34629cc90910052c7d"
+        }
+      ]
+    }
+  ]
+}

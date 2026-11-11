@@ -1,0 +1,73 @@
+{
+  "11155111": {
+    "name": "Ethereum Sepolia",
+    "testnet": true,
+    "rpcUrls": [
+      "https://eth-sepolia-testnet.api.pocket.network",
+      "https://ethereum-sepolia-rpc.publicnode.com"
+    ],
+    "multiSend": "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+    "multiSendCallOnly": "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "signMessageLib": "0xd53cd0aB83D845Ac265BE939c57F53AD838012c9",
+    "moduleProxyFactory": "0x000000000000aDdB49795b0f9bA5BC298cDda236",
+    "realityMastercopy": "0x4e35DA39Fa5893a70A40Ce964F993d891E607cC0",
+    "reality": "0xaf33DcB6E8c5c4D9dDF579f53031b514d19449CA",
+    "hats": "0x3bc1A0Ad72417f2d411118085256fC53CBdDd137",
+    "ensRegistrar": "0xf633e7fc17e2bbe0d0965d18ec1821dcb754a3d3",
+    "ensPaymentToken": "0x240b0316df57887dbbe58b586508b19e633a14aa",
+    "ensUniversalHelper": "0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe",
+    "hub": "https://testnet.hub.snapshot.org",
+    "sequencer": "https://testnet.seq.snapshot.org",
+    "_sources": {
+      "rpcUrls": "Same public URLs as the fresh3 network registry: localnodes_web3 config/install safe_smart_accounts.network.ethereum_sepolia.yml, rpc_urls. Used only when SPONSOR_RELAYER_RPC_URL_11155111 is unset.",
+      "multiSend": "Safe 1.4.1 multi_send, safe-deployments v1.4.1 (fresh3 tests/e2e/fork/vendor/safe-1.4.1)",
+      "multiSendCallOnly": "Safe 1.4.1 multi_send_call_only, safe-deployments v1.4.1",
+      "createCall": "Safe 1.4.1 create_call, safe-deployments v1.4.1",
+      "signMessageLib": "Safe 1.4.1 sign_message_lib, safe-deployments v1.4.1",
+      "moduleProxyFactory": "Zodiac ModuleProxyFactory v1.2.0, gnosisguild/zodiac src/contracts.ts @b7988c0e lines 88-91",
+      "realityMastercopy": "Zodiac Reality module mastercopy, gnosisguild/zodiac src/contracts.ts @b7988c0e lines 73-75",
+      "reality": "Reality.eth 3.0, reality-eth-monorepo chains/deployments/11155111/ETH/RealityETH-3.0.json",
+      "hats": "Hats Protocol, score-api hats-protocol-hat-id/examples.json",
+      "ensRegistrar": "ENSv2 Sepolia registrar, bigname docs/sepolia-deployment.md line 32, ens_v2_sepolia_20261001 @07e55a05",
+      "ensPaymentToken": "MockUSDC with open mint, bigname docs/sepolia-deployment.md line 43",
+      "ensUniversalHelper": "ENSv2 UniversalHelper, snapshot.js src/networks.json 11155111.ensUniversalHelper",
+      "hub": "Snapshot testnet hub",
+      "sequencer": "Snapshot testnet sequencer, GET / reports SNAPSHOT_ENV testnet"
+    }
+  },
+  "84532": {
+    "name": "Base Sepolia",
+    "testnet": true,
+    "sponsoring": false,
+    "rpcUrls": [
+      "https://base-sepolia-testnet.api.pocket.network",
+      "https://base-sepolia-rpc.publicnode.com",
+      "https://sepolia.base.org"
+    ],
+    "multiSend": "0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526",
+    "multiSendCallOnly": "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "signMessageLib": "0xd53cd0aB83D845Ac265BE939c57F53AD838012c9",
+    "moduleProxyFactory": "0x000000000000aDdB49795b0f9bA5BC298cDda236",
+    "realityMastercopy": "0x4e35DA39Fa5893a70A40Ce964F993d891E607cC0",
+    "reality": "0x86b653Dc9aa6d7311109276925927087573f91CB",
+    "hats": "0x3bc1A0Ad72417f2d411118085256fC53CBdDd137",
+    "hub": "https://testnet.hub.snapshot.org",
+    "sequencer": "https://testnet.seq.snapshot.org",
+    "_sources": {
+      "rpcUrls": "Same public URLs as the fresh3 network registry: localnodes_web3 config/install safe_smart_accounts.network.base_sepolia.yml, rpc_urls. Used only when SPONSOR_RELAYER_RPC_URL_84532 is unset.",
+      "multiSend": "Safe 1.4.1 multi_send, same address on every chain",
+      "multiSendCallOnly": "Safe 1.4.1 multi_send_call_only, same address on every chain",
+      "createCall": "Safe 1.4.1 create_call, same address on every chain",
+      "signMessageLib": "Safe 1.4.1 sign_message_lib, same address on every chain",
+      "moduleProxyFactory": "Zodiac ModuleProxyFactory v1.2.0, same address on Base Sepolia",
+      "realityMastercopy": "Zodiac Reality module mastercopy, same address on Base Sepolia",
+      "reality": "Reality.eth 3.0 on Base Sepolia, reality-eth-monorepo chains/deployments/84532/ETH/RealityETH-3.0.json",
+      "hats": "Hats Protocol, same address on Base Sepolia",
+      "hub": "Snapshot testnet hub",
+      "sequencer": "Snapshot testnet sequencer",
+      "sponsoring": "Off until Phase 30 (25-28 round 3, ruling on Codex HIGH 4): an OP-stack send also pays an L1 data fee and an operator fee, which the spend cap does not count yet. Reads and GET /status still serve this chain."
+    }
+  }
+}

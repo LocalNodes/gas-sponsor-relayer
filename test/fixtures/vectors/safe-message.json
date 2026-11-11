@@ -1,0 +1,83 @@
+{
+  "chainId": 11155111,
+  "safe": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+  "safeMsgTypehash": "0x60b3cbf8b4a223d68d641b3b6ddf9a298e7f33710cf3d3a9d1146b5a6150fbca",
+  "erc1271Magic": "0x1626ba7e",
+  "snapshotHash": "0x7b8441a6b8097e70e57dabf5a05f798dbd30103ebf604580f76413ccd59f3550",
+  "encodedMessage": "0x7b8441a6b8097e70e57dabf5a05f798dbd30103ebf604580f76413ccd59f3550",
+  "domainSeparator": "0x1781d417aab29cfee0dcdca890d20c025850a6d0a3599a2ee8c877a2e7bc62ec",
+  "safeMessageDigest": "0xf0c986e663d0fc56ee9f106877828119b41ad009f262944f8cf38df929764ed0",
+  "typedData": {
+    "domain": {
+      "chainId": 11155111,
+      "verifyingContract": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE"
+    },
+    "types": {
+      "SafeMessage": [
+        {
+          "name": "message",
+          "type": "bytes"
+        }
+      ]
+    },
+    "primaryType": "SafeMessage",
+    "message": {
+      "message": "0x7b8441a6b8097e70e57dabf5a05f798dbd30103ebf604580f76413ccd59f3550"
+    }
+  },
+  "owners": [
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+  ],
+  "note": "Keys are anvil public dev keys 0 and 1. Case two signs in descending address order; concatenated is always ascending.",
+  "cases": [
+    {
+      "name": "signed in ascending owner order",
+      "signingOrder": [
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      ],
+      "ascendingOwners": [
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      ],
+      "signingOrderDiffersFromOwnerOrder": false,
+      "signatures": [
+        {
+          "owner": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "signature": "0xab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1c"
+        },
+        {
+          "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "signature": "0xbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151b"
+        }
+      ],
+      "concatenated": "0xab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1cbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151b",
+      "naiveConcatInSigningOrder": "0xab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1cbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151b"
+    },
+    {
+      "name": "signed in descending owner order (differs from owner order)",
+      "signingOrder": [
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+      ],
+      "ascendingOwners": [
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      ],
+      "signingOrderDiffersFromOwnerOrder": true,
+      "signatures": [
+        {
+          "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "signature": "0xbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151b"
+        },
+        {
+          "owner": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "signature": "0xab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1c"
+        }
+      ],
+      "concatenated": "0xab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1cbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151b",
+      "naiveConcatInSigningOrder": "0xbdfdba24d70a5a61903893f2fceb151b95fee03dc45f71dfa9c3749280428cf46fe7e2285db06777fdb231f3e86ce613b239a92a1582ca9550ab956c15a76f151bab3bf97cbb2b606ac2bea593c949e87c52f052e44814762e1b7f33e108fa928d5bb1f633f8a1f28aea03dfb20bf8633417d40f42c7174a39c1bd5f8c4e9c142c1c"
+    }
+  ]
+}

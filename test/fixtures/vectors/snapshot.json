@@ -1,0 +1,58 @@
+{
+  "domain": {
+    "name": "snapshot",
+    "version": "0.1.4"
+  },
+  "space": {
+    "types": "{\"Space\":[{\"name\":\"from\",\"type\":\"address\"},{\"name\":\"space\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"uint64\"},{\"name\":\"settings\",\"type\":\"string\"}]}",
+    "typesSha256": "0x110b37d3e2625cd6e1ec7b921e77773083b2a2949e69bd3a35fd9f1031ca5666",
+    "message": {
+      "from": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+      "space": "gov-vectors.eth",
+      "timestamp": 1790000000,
+      "settings": "{\"name\":\"Gov Vectors\",\"network\":\"11155111\",\"symbol\":\"VOTE\",\"admins\":[],\"moderators\":[],\"members\":[],\"strategies\":[{\"name\":\"hats-protocol-hat-id\",\"network\":\"11155111\",\"params\":{\"address\":\"0x3bc1A0Ad72417f2d411118085256fC53CBdDd137\",\"hatId\":\"3758.1\"}}],\"validation\":{\"name\":\"basic\",\"params\":{\"minScore\":1,\"strategies\":[{\"name\":\"hats-protocol-hat-id\",\"network\":\"11155111\",\"params\":{\"address\":\"0x3bc1A0Ad72417f2d411118085256fC53CBdDd137\",\"hatId\":\"3758.2\"}}]}},\"voting\":{\"type\":\"basic\",\"period\":86400,\"quorum\":3,\"delay\":0,\"privacy\":\"\"},\"filters\":{\"onlyMembers\":false},\"plugins\":{\"safeSnap\":{\"safes\":[{\"network\":\"11155111\",\"realityAddress\":\"0x4d4F4D4F4d4f4D4f4d4F4d4F4D4F4D4f4d4F4d4F\"}]}},\"treasuries\":[{\"name\":\"Group fund\",\"address\":\"0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE\",\"network\":\"11155111\"}]}"
+    },
+    "digest": "0x7b8441a6b8097e70e57dabf5a05f798dbd30103ebf604580f76413ccd59f3550"
+  },
+  "proposal": {
+    "types": "{\"Proposal\":[{\"name\":\"from\",\"type\":\"string\"},{\"name\":\"space\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"uint64\"},{\"name\":\"type\",\"type\":\"string\"},{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"body\",\"type\":\"string\"},{\"name\":\"discussion\",\"type\":\"string\"},{\"name\":\"choices\",\"type\":\"string[]\"},{\"name\":\"labels\",\"type\":\"string[]\"},{\"name\":\"start\",\"type\":\"uint64\"},{\"name\":\"end\",\"type\":\"uint64\"},{\"name\":\"snapshot\",\"type\":\"uint64\"},{\"name\":\"plugins\",\"type\":\"string\"},{\"name\":\"privacy\",\"type\":\"string\"},{\"name\":\"app\",\"type\":\"string\"}]}",
+    "typesSha256": "0xe037b37311c75c995f732b57cd456bdc685e5eac29668698be34388cafb14097",
+    "message": {
+      "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "space": "gov-vectors.eth",
+      "timestamp": 1790000000,
+      "type": "basic",
+      "title": "Fund the seed library",
+      "body": "Pay 50 USDC to the seed library.",
+      "discussion": "",
+      "choices": [
+        "For",
+        "Against",
+        "Abstain"
+      ],
+      "labels": [],
+      "start": 1790000000,
+      "end": 1790086400,
+      "snapshot": 12087057,
+      "plugins": "{}",
+      "privacy": "",
+      "app": "localnodes"
+    },
+    "digest": "0x2add53fb31ef29e5dd71cee644cdc78afeb6bc4817c07c45d525750aa079f0ee"
+  },
+  "vote": {
+    "types": "{\"Vote\":[{\"name\":\"from\",\"type\":\"string\"},{\"name\":\"space\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":\"uint64\"},{\"name\":\"proposal\",\"type\":\"string\"},{\"name\":\"choice\",\"type\":\"uint32\"},{\"name\":\"reason\",\"type\":\"string\"},{\"name\":\"app\",\"type\":\"string\"},{\"name\":\"metadata\",\"type\":\"string\"}]}",
+    "typesSha256": "0xfb8fa9816cd42974e7f1af671aa548c8c458553364ed809e45042f141de8c0d5",
+    "message": {
+      "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "space": "gov-vectors.eth",
+      "timestamp": 1790000060,
+      "proposal": "0xabababababababababababababababababababababababababababababababab",
+      "choice": 1,
+      "reason": "",
+      "app": "localnodes",
+      "metadata": "{}"
+    },
+    "digest": "0x09243402c8b8a79c35154ad1ad6c3fe65e5a48b8b77b1848ca4a6445cd6e01e6"
+  }
+}

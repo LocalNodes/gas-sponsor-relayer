@@ -1,0 +1,20 @@
+{
+  "name": "gas-sponsor-relayer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Per-community gas sponsor relayer for LocalNodes group governance: holds the one sending key and pays gas for owner-signed Safe transactions.",
+  "license": "GPL-2.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test --test-reporter=tap --test-name-pattern=\"${TEST_PATTERN:-.}\" \"test/unit/*.test.js\"",
+    "mutate": "node scripts/mutate.mjs",
+    "test:fork": "node --test --test-concurrency=1 --test-reporter=tap --test-name-pattern=\"${TEST_PATTERN:-.}\" \"test/fork/*.test.js\""
+  },
+  "dependencies": {
+    "viem": "2.57.10"
+  }
+}

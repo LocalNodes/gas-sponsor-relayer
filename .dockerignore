@@ -1,0 +1,8 @@
+node_modules
+test
+data
+.git
+*.sqlite
+*.sqlite-journal
+.env
+README.md

@@ -1,0 +1,214 @@
+{
+  "rule": "passed <=> state == 'closed' and scores_state == 'final' and scores_total >= quorum and scores[0] > scores[1]; fewer than two scores never passes; Abstain is scores[2] and counts only toward scores_total",
+  "cases": [
+    {
+      "name": "total equal to quorum passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          3,
+          1,
+          0
+        ],
+        "scores_total": 4,
+        "quorum": 4
+      },
+      "expected": {
+        "passed": true,
+        "reason": "passed"
+      }
+    },
+    {
+      "name": "total one below quorum fails",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          3,
+          0,
+          0
+        ],
+        "scores_total": 3,
+        "quorum": 4
+      },
+      "expected": {
+        "passed": false,
+        "reason": "quorum-not-met"
+      }
+    },
+    {
+      "name": "For equal to Against fails",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          2,
+          2,
+          0
+        ],
+        "scores_total": 4,
+        "quorum": 1
+      },
+      "expected": {
+        "passed": false,
+        "reason": "for-not-above-against"
+      }
+    },
+    {
+      "name": "Against above For fails",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          1,
+          2,
+          0
+        ],
+        "scores_total": 3,
+        "quorum": 1
+      },
+      "expected": {
+        "passed": false,
+        "reason": "for-not-above-against"
+      }
+    },
+    {
+      "name": "Abstain counts toward quorum",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          2,
+          1,
+          3
+        ],
+        "scores_total": 6,
+        "quorum": 6
+      },
+      "expected": {
+        "passed": true,
+        "reason": "passed"
+      }
+    },
+    {
+      "name": "without the Abstain the same scores miss quorum",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          2,
+          1,
+          0
+        ],
+        "scores_total": 3,
+        "quorum": 6
+      },
+      "expected": {
+        "passed": false,
+        "reason": "quorum-not-met"
+      }
+    },
+    {
+      "name": "scores_state pending never passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "pending",
+        "scores": [
+          5,
+          0,
+          0
+        ],
+        "scores_total": 5,
+        "quorum": 1
+      },
+      "expected": {
+        "passed": false,
+        "reason": "scores-not-final"
+      }
+    },
+    {
+      "name": "closed with empty scores never passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [],
+        "scores_total": 0,
+        "quorum": 0
+      },
+      "expected": {
+        "passed": false,
+        "reason": "scores-missing"
+      }
+    },
+    {
+      "name": "state active never passes",
+      "input": {
+        "state": "active",
+        "scores_state": "final",
+        "scores": [
+          5,
+          0,
+          0
+        ],
+        "scores_total": 5,
+        "quorum": 1
+      },
+      "expected": {
+        "passed": false,
+        "reason": "not-closed"
+      }
+    },
+    {
+      "name": "scores array of two entries passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          3,
+          1
+        ],
+        "scores_total": 4,
+        "quorum": 4
+      },
+      "expected": {
+        "passed": true,
+        "reason": "passed"
+      }
+    },
+    {
+      "name": "scores array of one entry never passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          3
+        ],
+        "scores_total": 3,
+        "quorum": 1
+      },
+      "expected": {
+        "passed": false,
+        "reason": "scores-missing"
+      }
+    },
+    {
+      "name": "zero quorum with For above Against passes",
+      "input": {
+        "state": "closed",
+        "scores_state": "final",
+        "scores": [
+          1,
+          0,
+          0
+        ],
+        "scores_total": 1,
+        "quorum": 0
+      },
+      "expected": {
+        "passed": true,
+        "reason": "passed"
+      }
+    }
+  ]
+}

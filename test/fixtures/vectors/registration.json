@@ -1,0 +1,18 @@
+{
+  "domain": {
+    "name": "gas-sponsor-relayer",
+    "version": "1",
+    "chainId": 11155111
+  },
+  "types": "{\"SponsorRegistration\":[{\"name\":\"relayer\",\"type\":\"address\"},{\"name\":\"chainId\",\"type\":\"uint256\"},{\"name\":\"safe\",\"type\":\"address\"},{\"name\":\"space\",\"type\":\"string\"},{\"name\":\"community\",\"type\":\"string\"}]}",
+  "message": {
+    "relayer": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+    "chainId": 11155111,
+    "safe": "0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE",
+    "space": "gov-vectors.eth",
+    "community": "Gov Vectors"
+  },
+  "digest": "0xcd480a1aadcf1c2dcf6472c972dcd5e47dcedb4c69b135a7f1432f84e77c1fb4",
+  "safeMessageDigest": "0x0474e6ad491f7f9ac63a47859e906b8e614d67f35d0e6162db6eef56e7806089",
+  "note": "The Group Safe owners sign SafeMessage{abi.encode(digest)} under the Safe domain; the relayer checks it with isValidSignature on the Safe."
+}
