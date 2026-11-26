@@ -1,4 +1,4 @@
-// Bond reclaim (25-07, TM-82). A bond the relayer posted with submitAnswer counts as spend until it comes back.
+// Bond reclaim (TM-82). A bond the relayer posted with submitAnswer counts as spend until it comes back.
 // Every minute this loop works through the questions the relayer answered (the reality_questions table):
 //
 //   answered  the bond is paid. Once Reality says the question is final, the answer history is rebuilt from the
@@ -125,7 +125,7 @@ export function createReclaim({ db, config, networks, chains, cap, queue, pipeli
       const data = encodeFunctionData({ abi: realityAbi, functionName: 'withdraw' });
       result.withdrawHash = await sendStep(q, list, reality, 'withdraw', 'withdraw', data, 'reality-withdraw');
       // Only now, with a mined withdraw, does the cap get its credit.
-      // A bond with no spend entry left (its send was replaced and the reservation given back, 25-28 fix A) gets no
+      // A bond with no spend entry left (its send was replaced and the reservation given back) gets no
       // credit; the result says 0 and an audit line records what was withdrawn and why nothing was credited.
       const credit = balance < q.bondWei ? balance : q.bondWei;
       const creditId = cap.credit(q.bondRef, credit);

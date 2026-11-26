@@ -31,7 +31,7 @@ export function chainIsConfigured(networks, chainId) {
 
 /**
  * The relayer pays for sends on a chain only when it is configured and its entry does not say `"sponsoring": false`.
- * Base Sepolia says so until Phase 30 (25-28 round 3): the spend cap counts execution gas and value, not an OP-stack
+ * Base Sepolia says so for now: the spend cap counts execution gas and value, not an OP-stack
  * chain's L1 data fee and operator fee. Reads and GET /status still serve such a chain.
  */
 export function chainIsSponsored(networks, chainId) {

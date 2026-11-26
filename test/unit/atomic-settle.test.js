@@ -1,4 +1,4 @@
-// 25-28 round 3, #1 (Codex round 3 HIGH 1): an interrupted settlement must never become uncharged spend.
+// An interrupted settlement must never become uncharged spend.
 // - settle() wrote the row's status `mined` and then the real cost to the ledger, as separate writes. A crash or a
 //   failed write between them left a mined row with an open reservation, and releaseOrphans() at boot gave that
 //   reservation back as if nothing had been sent. Now the status, the ledger change and the event of a settlement
@@ -44,8 +44,8 @@ const snapshot = (db) => ({
   events: db.listEvents().map((e) => e.kind),
 });
 
-describe('round 3 #1: a settlement is one transaction', () => {
-  test('atomic-settle: Codex repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits', async () => {
+describe('a settlement is one transaction', () => {
+  test('atomic-settle: repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits', async () => {
     const ctx = setup({ dayWei: 1000n, monthWei: 1000n });
     const { db, cap, node, queue } = ctx;
     const reservation = cap.reserve(CHAIN, 1000n);
@@ -71,7 +71,7 @@ describe('round 3 #1: a settlement is one transaction', () => {
   const named = (method, how) => `${how.after ? 'after' : 'at'} ${method}`;
 
   test('atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once', async () => {
-    // A settlement (round 3, #2: once the receipt's block is final): the row's status, then the ledger (the reservation
+    // A settlement (#2: once the receipt's block is final): the row's status, then the ledger (the reservation
     // and its bump increase become the real cost).
     for (const [method, how] of crashes(['updatePending', 'settleSpend'])) {
       const name = named(method, how);
@@ -187,7 +187,7 @@ describe('round 3 #1: a settlement is one transaction', () => {
   });
 });
 
-describe('round 3 #1: boot recovers, never releases, a reservation a send row holds', () => {
+describe('boot recovers, never releases, a reservation a send row holds', () => {
   /** A row in `status` whose reservation of 1,000 wei is still open, as an older database or a crash could leave it. */
   async function leftOver(status) {
     const ctx = setup({ dayWei: 1000n, monthWei: 1000n });

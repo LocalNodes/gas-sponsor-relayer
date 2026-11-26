@@ -1,4 +1,4 @@
-// The serial nonce queue: ordering, reconcile, fee bumps, alerts (25-05).
+// The serial nonce queue: ordering, reconcile, fee bumps, alerts.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCap } from '../../src/cap.js';
@@ -18,7 +18,7 @@ function fakeChain(o = {}) {
     async getTransactionCount({ blockTag }) { return blockTag === 'pending' ? s.pending : s.latest; },
     async getBlockNumber() { return s.block; },
     async getTransactionReceipt({ hash }) { const r = s.receipts[hash]; if (!r) throw new Error('not found'); return r; },
-    // Every block this fake has used is final (25-28 round 3: a receipt settles at finality).
+    // Every block this fake has used is final (a receipt settles at finality).
     getBlock: finalBlocks(() => topOf(s.block, s.receipts), () => s.included),
   };
   const walletClient = rawWallet((tx, hash) => {

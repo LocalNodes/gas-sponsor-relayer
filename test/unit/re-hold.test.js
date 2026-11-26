@@ -1,9 +1,9 @@
-// 25-28 fix round 5 (Codex round 5 INTRODUCED HIGH; the orchestrator's ruling: round-4 Q1 is now (b)).
+// The re-hold of a replaced send.
 // A send marked replaced has had its reservation given back. When a receipt of one of its own hashes appears later,
 // the reservation (with every fee-bump increase) is held again first, whole, before any read that can fail: the send
 // goes back to pending. Only a receipt bound to its block (ownIn 'bound') then marks it confirming, and only a final
-// one settles it. Round 4 checked the binding first, so a failed block read or an unbound receipt left the send
-// replaced with nothing held, and another full reservation fitted beside it.
+// one settles it. Checking the binding first would let a failed block read or an unbound receipt leave the send
+// replaced with nothing held, and another full reservation fit beside it.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CapReached } from '../../src/cap.js';
@@ -43,8 +43,8 @@ function heldAgain({ db, cap }, name) {
   assert.throws(() => cap.reserve(CHAIN, 1000n), CapReached, `${name}: a second 1,000 does not fit`);
 }
 
-describe('round 5: a replaced send whose own receipt appears is held again before the binding read', () => {
-  test('round 5: Codex repro: caps of 1,000, the send is replaced, its own receipt appears and the block read fails: 1,000 is held again and a second 1,000 does not fit', async () => {
+describe('a replaced send whose own receipt appears is held again before the binding read', () => {
+  test('re-hold: repro: caps of 1,000, the send is replaced, its own receipt appears and the block read fails: 1,000 is held again and a second 1,000 does not fit', async () => {
     const { db, cap, node, queue, sent } = await replacedSend();
     node.state.receipts[sent.hash] = receipt(sent.hash, 50n, 3n, 108n);
     node.state.proofError = (method) => method === 'block';
@@ -54,7 +54,7 @@ describe('round 5: a replaced send whose own receipt appears is held again befor
     assert.throws(() => cap.reserve(CHAIN, 1000n), CapReached);
   });
 
-  test('round 5: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled', async () => {
+  test('re-hold: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled', async () => {
     const ctx = await replacedSend();
     const { db, node, queue, sent } = ctx;
     // The receipt names block 108, but block 108 does not list the transaction (no inBlock): the evidence disagrees.
@@ -68,7 +68,7 @@ describe('round 5: a replaced send whose own receipt appears is held again befor
     heldAgain(ctx, 'once final');
   });
 
-  test('round 5: a replaced send whose binding read fails is held again; once the read answers it confirms', async () => {
+  test('re-hold: a replaced send whose binding read fails is held again; once the read answers it confirms', async () => {
     const cases = {
       'the block read fails': (n) => { n.state.proofError = (m) => m === 'block'; },
       'the proof endpoint receipt read fails': (n) => { n.state.proofError = (m) => m === 'receipt'; },
@@ -90,7 +90,7 @@ describe('round 5: a replaced send whose own receipt appears is held again befor
     }
   });
 
-  test('round 5: a replaced send with a bound late receipt is held again, then confirming, and at finality stays held against the finalized OTHER (dedupe MEDIUM)', async () => {
+  test('re-hold: a replaced send with a bound late receipt is held again, then confirming, and at finality stays held against the finalized OTHER', async () => {
     const { db, cap, node, queue, sent } = await replacedSend();
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash, 50n, 3n, 108n));
     const written = [];
@@ -113,7 +113,7 @@ describe('round 5: a replaced send whose own receipt appears is held again befor
     assert.equal(JSON.parse(ev[0].detail).replacedBy, OTHER);
     assert.equal(JSON.parse(ev[0].detail).hash, sent.hash);
 
-    // OTHER at 103 and the own hash at 108 cannot both be on the finalized chain (Codex round-5 re-check MEDIUM).
+    // OTHER at 103 and the own hash at 108 cannot both be on the finalized chain.
     node.state.finalized = 108n;
     await queue.tick();
     assert.equal(db.listPending()[0].status, 'confirming');

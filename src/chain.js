@@ -20,13 +20,13 @@ export function createChains({ config, networks }) {
     const transport = urls.length === 1 ? http(urls[0]) : fallback(urls.map((u) => http(u)));
     return {
       chain,
-      // False on a chain whose sends the relayer does not pay for (Base Sepolia until Phase 30): the queue and the
+      // False on a chain whose sends the relayer does not pay for (Base Sepolia for now): the queue and the
       // pipeline refuse them before anything is reserved or sent.
       sponsored: chainIsSponsored(networks, chainId),
       publicClient: createPublicClient({ chain, transport }),
       // The release proof (queue.js) reads one endpoint in one pass, never a mix: the one the broadcasts go to.
       proofClient: createPublicClient({ chain, transport: http(urls[0]) }),
-      // The raw broadcast goes to one endpoint, once: no fallback and no retry (25-28 round 2, HIGH 1). A fallback
+      // The raw broadcast goes to one endpoint, once: no fallback and no retry. A fallback
       // would try the next URL after the first took the send and lost its answer, and the next URL's refusal would
       // then hide a live broadcast. One attempt makes "the node refused" mean what it says.
       walletClient: config.account ? createWalletClient({ account: config.account, chain, transport: http(urls[0], { retryCount: 0 }) }) : null,

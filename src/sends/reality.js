@@ -82,7 +82,7 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
     if (!config.configured) return { err: reply(503, { error: 'unavailable', reason: 'not_configured' }) };
     const clients = chainIsConfigured(networks, v.chainId) ? chains.get(v.chainId) : null;
     if (!clients) return { err: reply(403, { error: 'forbidden', reason: 'unknown_chain' }, 'unknown_chain') };
-    // Before any hub or chain read (25-28 round 3, #4): the relayer does not pay for sends on this chain.
+    // Before any hub or chain read: the relayer does not pay for sends on this chain.
     if (!chainIsSponsored(networks, v.chainId)) return { err: reply(503, { ...NOT_SPONSORED }) };
     const net = networks[String(v.chainId)];
     if (!net.reality) return { err: reply(403, { error: 'forbidden', reason: 'no_reality_on_network' }, 'no_reality_on_network') };
@@ -97,7 +97,7 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
   /**
    * Run a step; a hub or chain read that fails becomes a 502/503 with a code and no detail. `fn` gets `sent(out,
    * extra)`, to call on the pipeline's answer: once a send is out, anything that fails after it is logged and the
-   * answer is 202 with the hash (25-28 round 2, MEDIUM 5). A 502 there would hide a live send and invite a retry.
+   * answer is 202 with the hash. A 502 there would hide a live send and invite a retry.
    */
   async function guarded(name, fn) {
     let out = null;
@@ -223,7 +223,7 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
           functionName: 'executeProposalWithIndex',
           args: [v.proposalId, verdict.txHashes, tx.to, tx.value, tx.data, tx.operation, BigInt(txIndex)],
         });
-        const sent = track(await pipe.send({ chainId: v.chainId, safe: v.safe, to: ctx.module, selectorName: 'executeProposalWithIndex', data, kind: 'reality-execute', list: ctx.list, dedupeKey: `reality-execute:${v.chainId}:${questionId}:${txIndex}` }), { questionId, txIndex });
+        const sent = track(await pipe.send({ chainId: v.chainId, safe: v.safe, to: ctx.module, selectorName: 'executeProposalWithIndex', data, kind: 'reality-execute', list: ctx.list, dedupeKey: `reality-execute:${v.chainId}:${questionId}:${txIndex}`, feeVerdict: true }), { questionId, txIndex });
         return sendReply(sent, { questionId, txIndex });
       });
     },

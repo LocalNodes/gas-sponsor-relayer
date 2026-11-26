@@ -1,12 +1,12 @@
-// 25-28 fix round 2, HIGH 4 on a real node (the anvil fork; the ruling's two fork tests):
+// The release proof on a real node (the anvil fork):
 // - a send whose nonce another transaction took is released, and only once that transaction is in a block at or
 //   below `finalized`; GET /sends/:hash then answers not_sent with the consuming hash;
 // - a send whose own transaction mined while its receipt lookups read "not found" (a lagging index) is never
 //   released; once the receipt is readable, the real cost is recorded.
-// 25-28 round 3 adds two:
-// - #2: a receipt whose block is reorged out (evm_revert, then another block at that height) puts the send back to
+// And two more:
+// - a receipt whose block is reorged out (evm_revert, then another block at that height) puts the send back to
 //   pending with its whole reservation; the send mines again and settles to its real cost only once final;
-// - #3: an endpoint whose block by number is not on the finalized chain (a lagging backend still showing a side block
+// - an endpoint whose block by number is not on the finalized chain (a lagging backend still showing a side block
 //   with another transaction at the nonce) releases nothing.
 // Only anvil's public dev keys sign here, and only on the local fork.
 import { after, before, describe, test } from 'node:test';
@@ -46,7 +46,7 @@ describe('release proof (fork)', () => {
 
   /**
    * One plain sponsored send through the relayer's queue, with a reservation of RESERVED wei. It carries no value: on
-   * the Sepolia fork at the pinned block (11-11 run on the Pocket source) anvil's default accounts carry an EIP-7702
+   * the Sepolia fork at the pinned block (on the Pocket source) anvil's default accounts carry an EIP-7702
    * delegation, and every value transfer from them reverts, while a zero-value one succeeds.
    */
   async function send() {
@@ -144,7 +144,7 @@ describe('release proof (fork)', () => {
     assert.equal(res.json.minedHash, sent.hash);
   });
 
-  test('release-fork: round 3 #2: a receipt whose block is reorged out sends the send back to pending with its maximum; it settles only once final', async () => {
+  test('release-fork: a receipt whose block is reorged out sends the send back to pending with its maximum; it settles only once final', async () => {
     const before = await spent();
     const snap = await rpc('evm_snapshot');
     const sent = await send();
@@ -182,7 +182,7 @@ describe('release proof (fork)', () => {
     assert.equal(res.json.finalized, true);
   });
 
-  test('release-fork: round 3 #3: a block by number that is not on the finalized chain releases nothing', async () => {
+  test('release-fork: a block by number that is not on the finalized chain releases nothing', async () => {
     const before = await spent();
     const nonce = await pub.getTransactionCount({ address: RELAYER_ACCOUNT.address, blockTag: 'pending' });
     // A side block: another transaction of the relayer's key at the nonce the next send will take, then reverted.

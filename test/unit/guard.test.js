@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SELECTORS } from '../../src/allowlist.js';
+import { CREATION_SELECTORS, SELECTORS } from '../../src/allowlist.js';
 
 const SRC = new URL('../../src/', import.meta.url).pathname;
 
@@ -26,8 +26,11 @@ const READ_ONLY = [
   'getBestAnswer',
   // The Safe's nonce, read to key a safe-exec request (sends/safeExec.js)
   'nonce',
+  // The proxy factory's creation code, read once per chain and checked against its hash (sends/safeCreate.js)
+  'proxyCreationCode',
 ];
-const ALLOWED_FUNCTIONS = new Set([...Object.keys(SELECTORS), ...READ_ONLY]);
+// Sponsored fund creation: the factory call, and the initializer encoded inside it (sends/safeCreate.js).
+const ALLOWED_FUNCTIONS = new Set([...Object.keys(SELECTORS), ...Object.keys(CREATION_SELECTORS), ...READ_ONLY]);
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));

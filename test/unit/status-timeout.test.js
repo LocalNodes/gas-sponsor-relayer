@@ -1,4 +1,4 @@
-// GET /status with a stalled chain (25-10 inbox item 4, 25-26 addendum).
+// GET /status with a stalled chain.
 //
 // Every per-chain read behind /status is capped at about 3 s. A chain whose RPC accepts the connection
 // and never answers reads {"error": "unreachable"}, the other chains keep their values, and the whole
@@ -100,8 +100,8 @@ describe('status: per-chain read cap', () => {
       assert.equal(res.status, 200);
       assert.ok(elapsed < 4000, `GET /status took ${elapsed} ms`);
       assert.ok(stalled.requests.length > 0, 'the stalled chain was asked');
-      assert.deepEqual(json.chains[String(STALLED)], { error: 'unreachable' });
-      assert.deepEqual(json.chains[String(LIVE)], { balanceWei: '2000000000000000000', pending: 2 });
+      assert.deepEqual(json.chains[String(STALLED)], { error: 'unreachable', covered: false });
+      assert.deepEqual(json.chains[String(LIVE)], { balanceWei: '2000000000000000000', pending: 2, covered: true });
       const byChain = Object.fromEntries(json.groups.map((g) => [g.chainId, g]));
       assert.equal(byChain[STALLED].module, null, 'a Group on the stalled chain reads no module');
       assert.equal(byChain[LIVE].module, null);

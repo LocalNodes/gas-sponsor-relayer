@@ -5,8 +5,10 @@ import { openDb } from '../../src/db.js';
 import { createServer } from '../../src/server.js';
 import { capsFromEnv, createCap } from '../../src/cap.js';
 import { createQueue } from '../../src/queue.js';
+import { DISABLED_POLICY } from '../../src/creations.js';
 import { ERC1271_MAGIC } from '../../src/registration.js';
 import { TOKEN, COMMUNITY, privateKeyOf, RELAYER_ACCOUNT } from './fork.js';
+import { sepoliaCreationCode } from './creation.js';
 
 export { TOKEN, COMMUNITY, privateKeyOf, RELAYER_ACCOUNT };
 export const SAFE = getAddress('0x5afe5afe5afe5afe5afe5afe5afe5afe5afe5afe');
@@ -39,7 +41,7 @@ export function rawWallet(send, chainId = 11155111) {
 
 /** A chain stub that records every call. Options change what the RPC answers. */
 export function stubChains(networks, opts = {}) {
-  const calls = { call: 0, send: 0, read: 0, nonce: 0, sent: [] };
+  const calls = { call: 0, send: 0, read: 0, nonce: 0, estimate: 0, sent: [] };
   let nonceCounter = 0;
   const o = { balance: 5n * 10n ** 18n, latest: 3, pending: 3, sim: SIM_TRUE, unreachable: false, readResult: ERC1271_MAGIC, sendError: null, gas: 100000n, maxFeePerGas: 10n ** 9n, maxPriorityFeePerGas: 10n ** 8n, block: 1000n, receipts: {}, ...opts };
   const down = () => new Error(`HTTP request failed. URL: http://rpc.invalid/${'secret-key-in-url'}`);
@@ -61,7 +63,9 @@ export function stubChains(networks, opts = {}) {
       // readResult may be a function of the call ({address, functionName, args}), e.g. a fake EIP-1271 check.
       if (typeof o.readResult === 'function') return o.readResult(req); if (o.readResult instanceof Error) throw o.readResult; return o.readResult;
     },
-    async estimateGas() { if (o.estimateError) throw o.estimateError; return o.gas; },
+    // `estimateErrorAccountOnly`: the estimate fails only when it is made as the fee account (a balance-capped estimate);
+    // asked without an account it answers (`plainEstimateError` is what it throws instead), as a node does for a call that does not depend on the sender.
+    async estimateGas(args) { calls.estimate += 1; if (o.plainEstimateError && !args?.account) throw o.plainEstimateError; if (o.estimateError && !(o.estimateErrorAccountOnly && !args?.account)) throw o.estimateError; return o.gas; },
     async estimateFeesPerGas() { if (o.feeError) throw o.feeError; return { maxFeePerGas: o.maxFeePerGas, maxPriorityFeePerGas: o.maxPriorityFeePerGas }; },
     async getBlockNumber() { return typeof o.block === 'function' ? o.block() : o.block; },
     async getTransactionReceipt({ hash }) { const r = o.receipts[hash]; if (!r) throw new Error('receipt not found'); return r; },
@@ -86,7 +90,7 @@ export function stubChains(networks, opts = {}) {
   };
 }
 
-export async function startStub({ env = {}, networks = loadNetworks(), chainsOpts = {}, groups = [], capNow, chains: givenChains = null } = {}) {
+export async function startStub({ env = {}, networks = loadNetworks(), chainsOpts = {}, groups = [], capNow, chains: givenChains = null, dbPath = ':memory:', creationPolicy = undefined, creationCode = undefined, now = undefined } = {}) {
   const fullEnv = {
     WEB3_ENABLED: 'true',
     SPONSOR_RELAYER_PRIVATE_KEY: privateKeyOf(RELAYER_ACCOUNT),
@@ -98,14 +102,18 @@ export async function startStub({ env = {}, networks = loadNetworks(), chainsOpt
   for (const [k, v] of Object.entries(fullEnv)) if (v === undefined) delete fullEnv[k];
   process.env.WEB3_ENABLED = 'true';
   const config = loadConfig(fullEnv, networks);
-  const db = openDb(':memory:');
+  const db = openDb(dbPath);
   for (const g of groups) db.addGroup({ community: COMMUNITY, ...g });
   const chains = givenChains ?? stubChains(networks, chainsOpts);
   const logs = [];
   const logger = { info: (l) => logs.push(String(l)), warn: (l) => logs.push(String(l)), error: (l) => logs.push(String(l)) };
   const cap = createCap({ db, caps: capsFromEnv(fullEnv), now: capNow });
   const queue = createQueue({ db, chains, cap, address: config.address, logger });
-  const server = createServer({ config, networks, db, chains, cap, queue, logger });
+  // Fund creation: the policy given, else creation off (the stub's default; the shipped file is on); `now` is the server clock.
+  // The factory's creation code: on a stubbed chain, the Sepolia hash without a read; on a given (fork) chain, the
+  // relayer's own reader, which reads the factory.
+  const code = creationCode ?? (givenChains ? undefined : sepoliaCreationCode);
+  const server = createServer({ config, networks, db, chains, cap, queue, logger, creationPolicy: creationPolicy ?? DISABLED_POLICY, ...(code ? { creationCode: code } : {}), ...(now ? { now } : {}) });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
   const call = async (method, path, body, token = TOKEN, extraHeaders = {}) => {

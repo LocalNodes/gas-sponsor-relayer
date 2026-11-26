@@ -1,4 +1,4 @@
-// The spend caps at their edges (25-05, D-19): boundary, window, month, bonds, integer math.
+// The spend caps at their edges (D-19): boundary, window, month, bonds, integer math.
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';

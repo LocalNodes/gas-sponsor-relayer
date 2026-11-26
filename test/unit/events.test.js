@@ -1,4 +1,4 @@
-// The event store, the GET /events feed, and the events the queue and the cap emit (25-08, D-16).
+// The event store, the GET /events feed, and the events the queue and the cap emit (D-16).
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CapReached, createCap, DAY_MS } from '../../src/cap.js';

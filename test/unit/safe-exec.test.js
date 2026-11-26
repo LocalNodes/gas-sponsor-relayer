@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { zeroAddress } from 'viem';
+import { ExecutionRevertedError, zeroAddress } from 'viem';
 import { loadNetworks } from '../../src/config.js';
 import { execBody, SAFE, SIM_FALSE, startStub } from '../helpers/stub.js';
 
@@ -59,7 +59,7 @@ describe('safe-exec (unit)', () => {
   });
 
   test('safe-exec: a failed simulation answers 409 and sends nothing', async () => {
-    for (const sim of [SIM_FALSE, new Error('execution reverted: GS026')]) {
+    for (const sim of [SIM_FALSE, new ExecutionRevertedError()]) {
       const { res, calls } = await once({ chainsOpts: { sim } }, {});
       assert.equal(res.status, 409);
       assert.equal(res.json.reason, 'simulation_failed');

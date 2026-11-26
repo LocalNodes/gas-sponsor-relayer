@@ -1,9 +1,9 @@
-// 25-28 dedupe round (orchestrator, 2026-11-11).
-// 1. Codex round-5 re-check, inherited MEDIUM: confirm() settled an own-hash inclusion that contradicts a finalized
+// Conflicting evidence about one nonce, and a release that needs positive proof.
+// 1. confirm() must not settle an own-hash inclusion that contradicts a finalized
 //    consumer of the same nonce. With OTHER taking nonce 5 at block 103 and the send's own hash "included" at 108 on
 //    the same chain, both cannot be true; only inconsistent RPC evidence produces it. The send must not settle: the
 //    whole reservation stays held.
-// 2. Round-5 Q1 pinning: the release is positive-only. An own-receipt lookup that throws plus a positive finalized
+// 2. The release is positive-only. An own-receipt lookup that throws plus a positive finalized
 //    consumer releases; one that throws with no positive consumer holds.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ import { blockHash, CHAIN, down, inBlock, receipt, setup, spentDay, tx } from '.
 const OTHER = `0x${'ab'.repeat(32)}`;
 
 describe('dedupe: confirm() refuses an own inclusion that contradicts a finalized consumer', () => {
-  test('dedupe MEDIUM: OTHER takes nonce 5 at 103, the own hash shows at 108; at finality the send does not settle and 1,000 stays held', async () => {
+  test('dedupe: OTHER takes nonce 5 at 103, the own hash shows at 108; at finality the send does not settle and 1,000 stays held', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n });
     const sent = await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.mined.push({ hash: OTHER, nonce: 5, block: 103n });
@@ -34,7 +34,7 @@ describe('dedupe: confirm() refuses an own inclusion that contradicts a finalize
     assert.throws(() => cap.reserve(CHAIN, 1000n), CapReached);
   });
 
-  test('dedupe MEDIUM control: the same own inclusion at 108 with no other consumer settles to the real cost', async () => {
+  test('dedupe control: the same own inclusion at 108 with no other consumer settles to the real cost', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n });
     const sent = await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.mined.push({ hash: sent.hash, nonce: 5, block: 108n });
@@ -52,8 +52,8 @@ describe('dedupe: confirm() refuses an own inclusion that contradicts a finalize
   });
 });
 
-describe('dedupe: Q1 pinning, the release is positive-only', () => {
-  test('dedupe Q1: the own-receipt lookup throws and a finalized consumer names OTHER: released', async () => {
+describe('dedupe: the release is positive-only', () => {
+  test('dedupe: the own-receipt lookup throws and a finalized consumer names OTHER: released', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n });
     await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.mined.push({ hash: OTHER, nonce: 5, block: 103n });
@@ -68,7 +68,7 @@ describe('dedupe: Q1 pinning, the release is positive-only', () => {
     assert.equal(spentDay(cap), 0n);
   });
 
-  test('dedupe Q1: the own-receipt lookup throws and no consumer is proven (the nonce only advanced): held', async () => {
+  test('dedupe: the own-receipt lookup throws and no consumer is proven (the nonce only advanced): held', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n });
     await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.latest = 6;
@@ -83,7 +83,7 @@ describe('dedupe: Q1 pinning, the release is positive-only', () => {
   });
 });
 
-describe('dedupe: Q2, onMined sees the stored change', () => {
+describe('dedupe: onMined sees the stored change', () => {
   /** A queue whose onMined hook records the row's stored status and the cap's spend at the moment it runs. */
   function watched() {
     const calls = [];
@@ -91,7 +91,7 @@ describe('dedupe: Q2, onMined sees the stored change', () => {
     return { ...ctx, calls };
   }
 
-  test('dedupe Q2: markConfirming stores confirming before onMined runs', async () => {
+  test('dedupe: markConfirming stores confirming before onMined runs', async () => {
     const { node, queue, cap, calls } = watched();
     const sent = await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.finalized = 102n;
@@ -101,7 +101,7 @@ describe('dedupe: Q2, onMined sees the stored change', () => {
     assert.deepEqual(calls, [{ status: 'confirming', spent: 1000n }]);
   });
 
-  test('dedupe Q2 (M57): a replaced send held again is stored, its reservation reopened, before onMined runs', async () => {
+  test('dedupe (M57): a replaced send held again is stored, its reservation reopened, before onMined runs', async () => {
     const { db, node, queue, cap, calls } = watched();
     const sent = await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.mined.push({ hash: OTHER, nonce: 5, block: 103n });
@@ -120,8 +120,8 @@ describe('dedupe: Q2, onMined sees the stored change', () => {
   });
 });
 
-describe('dedupe: Q2, the re-hold clears every field of the release', () => {
-  test('dedupe Q2 (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again', async () => {
+describe('dedupe: the re-hold clears every field of the release', () => {
+  test('dedupe (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n });
     const sent = await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });
     node.state.mined.push({ hash: OTHER, nonce: 5, block: 103n });
@@ -144,7 +144,7 @@ describe('dedupe: Q2, the re-hold clears every field of the release', () => {
 });
 
 describe('dedupe: rows an operator must look at, and the recheck that only reads the chain', () => {
-  /** The MEDIUM's held row: OTHER at 103 finalized, the own hash at 108, held at 1,000 in confirming. */
+  /** The held row of case 1: OTHER at 103 finalized, the own hash at 108, held at 1,000 in confirming. */
   async function conflicted(logs) {
     const logger = { info() {}, warn() {}, error: (m) => logs.push(m) };
     const ctx = setup({ dayWei: 1000n, monthWei: 1000n, queueOpts: { logger } });
@@ -242,22 +242,22 @@ describe('dedupe: a reorg clears the held reason, and the walk cache floor count
   });
 });
 
-describe('dedupe: Q5, the nonce is read on the proof client too', () => {
-  test('dedupe Q5: a lagging fallback (pending 5) beside the proof endpoint (pending 7): the send takes nonce 7', async () => {
+describe('dedupe: the nonce is read on the proof client too', () => {
+  test('dedupe: a lagging fallback (pending 5) beside the proof endpoint (pending 7): the send takes nonce 7', async () => {
     const { node, queue } = setup({ node: { pending: 5, proofPending: 7 } });
     const sent = await queue.enqueue(CHAIN, () => tx(), {});
     assert.equal(sent.nonce, 7);
     assert.ok(node.state.reads.some((r) => r[0] === 'proof' && r[1] === 'count' && r[2] === 'pending'));
   });
 
-  test('dedupe Q5: a lagging proof endpoint (pending 5) beside the fallback (pending 9): the send takes nonce 9', async () => {
+  test('dedupe: a lagging proof endpoint (pending 5) beside the fallback (pending 9): the send takes nonce 9', async () => {
     const { queue } = setup({ node: { pending: 9, proofPending: 5 } });
     const sent = await queue.enqueue(CHAIN, () => tx(), {});
     assert.equal(sent.nonce, 9);
   });
 });
 
-describe('dedupe: round-3 Q2 (b), the walk cache is pruned outside the walk, never cleared under it', () => {
+describe('dedupe: the walk cache is pruned outside the walk, never cleared under it', () => {
   test('dedupe walk: a proof walk longer than the kept-blocks limit finishes over several passes', async () => {
     const { db, cap, node, queue } = setup({ dayWei: 1000n, monthWei: 1000n, queueOpts: { walkBudget: 3, keptBlocks: 2 } });
     await queue.enqueue(CHAIN, () => tx(), { reservation: cap.reserve(CHAIN, 1000n) });

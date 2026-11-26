@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "siteUuid": "",
+  "groups": [],
+  "limits": {
+    "perActorPerDay": 1,
+    "perSitePerDay": 3
+  }
+}

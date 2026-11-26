@@ -1,9 +1,9 @@
-// A Group for the Reality tests (25-07), built on whichever fork FORK_NETWORK names.
+// A Group for the Reality tests, built on whichever fork FORK_NETWORK names.
 //
 // The Group is a 2-of-2 Safe with a Zodiac Reality module that the Safe owns, avatars and targets, set up the way
 // the real setup batch sets the module up (timeout 600 s, cooldown 300 s, no expiration, minimum bond 0.001 ETH).
 // It is built from the chain's own addresses in config/networks.json, with random salts, so every test file gets its own
-// Group and the same helper works on Ethereum Sepolia and Base Sepolia (25-26). The full setup batch, with the reference
+// Group and the same helper works on Ethereum Sepolia and Base Sepolia. The full setup batch, with the reference
 // Arbitrator and the hats, is proven in setup.fork.test.js; these tests do not need them.
 //
 // Reality.eth refuses a question whose template does not exist, so the helper creates the SafeSnap template on the

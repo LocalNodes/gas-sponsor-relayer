@@ -1,4 +1,4 @@
-// A scriptable node for the spend-safety tests (25-28 fix round 2). No network: every RPC answer comes from `state`.
+// A scriptable node for the spend-safety tests. No network: every RPC answer comes from `state`.
 //
 // The relayer sees a chain through three clients, as src/chain.js builds them:
 //   publicClient  ordinary reads; in production a fallback over every RPC URL
@@ -49,7 +49,7 @@ export const blockHash = (n, fork = 0) => `0x${fork.toString(16).padStart(2, '0'
 const BLOCK_HASH = /^0x([0-9a-f]{2})(?:b1){23}([0-9a-f]{16})$/;
 export const receipt = (hash, gasUsed = 50n, price = 3n, blockNumber = 101n, fork = 0) => ({ gasUsed, effectiveGasPrice: price, status: 'success', transactionHash: hash, blockNumber, blockHash: blockHash(blockNumber, fork) });
 /**
- * State that the block a receipt names lists the receipt's transaction, on the fake node `node` (round 5). The fake
+ * State that the block a receipt names lists the receipt's transaction, on the fake node `node`. The fake
  * never infers that from a receipt: a receipt alone binds nothing, so every test whose receipt should settle says so
  * here. Returns the receipt, to write `node.state.receipts[h] = inBlock(node, receipt(h))`.
  */
@@ -60,10 +60,10 @@ export function inBlock(node, r) {
 }
 /**
  * Block reads for a fake chain with no forks on which every block up to `top()` is final: the finalized block, and any
- * block by number or by hash, with hashes and parents that agree (round 3: a receipt settles only from a finalized
+ * block by number or by hash, with hashes and parents that agree (a receipt settles only from a finalized
  * block on the finalized chain). For the fakes in the older tests, which only ever mine on one chain.
- * `included()` returns [{ hash, block }]: the transactions each block lists. Nothing is inferred from a receipt (dedupe
- * round, Codex round-5 LOW): a test states every inclusion, with `listed(list, receipt)` for a receipt's own.
+ * `included()` returns [{ hash, block }]: the transactions each block lists. Nothing is inferred from a receipt:
+ * a test states every inclusion, with `listed(list, receipt)` for a receipt's own.
  */
 export function finalBlocks(top, included = () => []) {
   return async ({ blockTag, blockNumber, blockHash: byHash } = {}) => {
@@ -109,12 +109,12 @@ export const spentMonth = (cap) => BigInt(cap.status().spentMonthWei);
  *                         parent below it is the main chain's
  *   canon                 the fork reads by number follow, from its first height (default 0, the main chain)
  *   finalizedFork         when set, the fork whose block the finalized read names, whatever `canon` says: an endpoint
- *                         that disagrees with itself (Codex round 3, the two-hash repro)
+ *                         that disagrees with itself (the two-hash repro)
  *   txBlockHash(t)        when set, the blockHash a transaction object in a block reports
  *   txTamper(t)           when set, changes every transaction object a block lists
  *   byHashTamper(b)       when set, changes a block the proof endpoint answers to a read by hash
  *   base                  the relayer's nonce count before any block in `mined`
- *   receipts              hash -> receipt, as publicClient sees them. A receipt places nothing in a block (round 5):
+ *   receipts              hash -> receipt, as publicClient sees them. A receipt places nothing in a block:
  *                         its transaction is listed only where `blockTxs` or `mined` says
  *   blockTxs              [{ hash, block, fork?, nonce? }]: transactions listed in a block (fork default 0) without
  *                         moving the nonce counts, as `mined` does; `inBlock(node, receipt)` adds a receipt's own. The
@@ -122,7 +122,7 @@ export const spentMonth = (cap) => BigInt(cap.status().spentMonthWei);
  *   proofReceipts         hash -> receipt on the proof endpoint (default: `receipts`)
  *   publicMined           when set, publicClient answers block and nonce-at-block reads from this list instead
  *   proofPending          when set, the proof endpoint's `pending` nonce count (default `pending`)
- *   feeError              thrown by estimateFeesPerGas (dedupe round: a pre-broadcast 502)
+ *   feeError              thrown by estimateFeesPerGas (a pre-broadcast 502)
  *   refuse                thrown at broadcast before the node takes the transaction
  *   afterAccept           thrown once after the node took it (its answer was lost)
  *   defer                 the next broadcast waits until the test calls state.answer(error?) (no error: the node took it)
@@ -150,7 +150,7 @@ export function fakeNode(o = {}) {
   const blockAt = (list, n, f) => {
     const number = BigInt(n);
     const hash = blockHash(number, f);
-    // Only what the test placed: `mined` (or `publicMined`), and `blockTxs`. Never inferred from a receipt (round 5).
+    // Only what the test placed: `mined` (or `publicMined`), and `blockTxs`. Never inferred from a receipt.
     const listed = s.blockTxs
       .filter((b) => BigInt(b.block) === number && (b.fork ?? 0) === f)
       .map((b) => ({ hash: b.hash, nonce: b.nonce ?? nonces.get(String(b.hash).toLowerCase()), block: number }));

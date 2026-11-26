@@ -10,6 +10,8 @@ const ROUTES = [
   ['GET', '/events?since=0'],
   ['POST', '/groups'],
   ['POST', '/send/safe-exec'],
+  ['POST', '/send/safe-create'],
+  ['GET', '/creations/00000000-0000-4000-8000-000000000000'],
   ['POST', '/send/ens'],
   ['POST', '/send/reality/add'],
   ['POST', '/send/reality/answer'],
@@ -18,6 +20,8 @@ const ROUTES = [
   ['GET', `/sends/0x${'0'.repeat(64)}`],
   ['GET', '/ops/recheck'],
   ['POST', '/ops/recheck'],
+  ['GET', '/site'],
+  ['POST', '/site'],
   ['GET', '/nothing-here'],
 ];
 
@@ -174,7 +178,7 @@ describe('status', () => {
       assert.equal(res.json.cap.dayWei, '50000000000000000');
       assert.equal(res.json.cap.spentDayWei, '0');
       assert.deepEqual(Object.keys(res.json.chains).sort(), ['11155111', '84532']);
-      assert.deepEqual(res.json.chains['11155111'], { balanceWei: '123456789012345678901234567890', pending: 2 });
+      assert.deepEqual(res.json.chains['11155111'], { balanceWei: '123456789012345678901234567890', pending: 2, covered: true });
       assert.match(res.json.chains['84532'].balanceWei, /^[0-9]+$/);
       assert.deepEqual(res.json.groups, [{ chainId: 11155111, safe: SAFE, space: 'a.eth', community: 'Gov Vectors', module: null }]);
       assert.equal(typeof res.json.chains['11155111'].balanceWei, 'string');
@@ -188,7 +192,7 @@ describe('status', () => {
     try {
       const res = await s.call('GET', '/status');
       assert.equal(res.status, 200);
-      assert.deepEqual(res.json.chains['84532'], { error: 'unreachable' });
+      assert.deepEqual(res.json.chains['84532'], { error: 'unreachable', covered: false });
       assert.equal(res.json.chains['11155111'].balanceWei, '5000000000000000000');
       assert.ok(!res.text.includes('secret-key-in-url'), 'RPC URL leaked');
       assert.ok(!res.text.includes('"balanceWei":"0"'));
@@ -198,7 +202,7 @@ describe('status', () => {
     const allDown = await startStub({ chainsOpts: { unreachable: true } });
     try {
       const res = await allDown.call('GET', '/status');
-      for (const c of Object.values(res.json.chains)) assert.deepEqual(c, { error: 'unreachable' });
+      for (const [id, c] of Object.entries(res.json.chains)) assert.deepEqual(c, { error: 'unreachable', covered: id === '11155111' });
     } finally {
       await allDown.close();
     }

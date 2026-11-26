@@ -1,5 +1,5 @@
-// The relayer's event feed (D-16, 25-08). Drupal polls GET /events?since=<id> every cron minute and turns what it
-// finds into organizer alerts (25-25). Events are public chain facts about one Group and one Reality question; they hold
+// The relayer's event feed (D-16). Drupal polls GET /events?since=<id> every cron minute and turns what it
+// finds into organizer alerts. Events are public chain facts about one Group and one Reality question; they hold
 // no key and no secret.
 //
 // Seven types make up the feed:

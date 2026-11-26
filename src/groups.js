@@ -1,4 +1,4 @@
-// Per-Group Reality module discovery (25-06, TM-77).
+// Per-Group Reality module discovery (TM-77).
 //
 // The relayer learns a registered Group's module from the chain and from nothing else. A module counts
 // only if all of these hold: the Group's Safe has it enabled (it is in getModulesPaginated), its runtime

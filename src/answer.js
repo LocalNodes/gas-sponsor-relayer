@@ -4,7 +4,7 @@
 // finalize the scores first, because nothing else does), binds the proposal to the Safe's registered space, applies
 // the pass rule, builds the module's transaction hashes from the proposal's safeSnap plugin for this module and
 // compares their hash with the question's. Only decide() and decideFromVerdict() choose an answer, and the
-// answer endpoint and the watcher (25-08) post exactly what they return:
+// answer endpoint and the watcher post exactly what they return:
 //   yes      the proposal passed, is in the Safe's space and its transactions hash to the question's hash
 //   invalid  the proposal is not closed and final yet, so the question was asked before the vote resolved
 //   no       everything else

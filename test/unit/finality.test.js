@@ -1,4 +1,4 @@
-// 25-28 round 3, #2 (Codex round 3 HIGH 2, ruling (a)): a receipt settles the spend cap only once its block is
+// A receipt settles the spend cap only once its block is
 // finalized. Until then the send's whole reservation (its maximum, with every fee-bump increase) stays held.
 // - A receipt of one of the send's own hashes marks the send "mined, awaiting finality" (status `confirming`). It stays
 //   in the poll loop and in reconcile; it is never bumped or rebroadcast.
@@ -25,8 +25,8 @@ async function oneSend(o = {}) {
   return { ...ctx, sent, reservation };
 }
 
-describe('round 3 #2: the cap settles a receipt only at finality', () => {
-  test('finality: Codex repro: caps of 1,000; the receipt (100 wei) is not final, its block is reorged out, the send mines again for 400: liability is never under-counted', async () => {
+describe('the cap settles a receipt only at finality', () => {
+  test('finality: repro: caps of 1,000; the receipt (100 wei) is not final, its block is reorged out, the send mines again for 400: liability is never under-counted', async () => {
     const { db, cap, node, queue, sent } = await oneSend({ dayWei: 1000n, monthWei: 1000n, node: { finalized: 100n } });
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash, 50n, 2n, 101n)); // 100 wei, in block 101, not final
     node.state.block = 102n;
@@ -207,7 +207,7 @@ describe('round 3 #2: the cap settles a receipt only at finality', () => {
     assert.equal(next.nonce, 6);
   });
 
-  test('finality: a send marked replaced whose own receipt appears holds its maximum again, and never settles against the finalized OTHER (dedupe MEDIUM)', async () => {
+  test('finality: a send marked replaced whose own receipt appears holds its maximum again, and never settles against the finalized OTHER', async () => {
     const OTHER = `0x${'ab'.repeat(32)}`;
     const { db, cap, node, queue, sent } = await oneSend();
     node.state.mined.push({ hash: OTHER, nonce: 5, block: 103n });
@@ -230,7 +230,7 @@ describe('round 3 #2: the cap settles a receipt only at finality', () => {
   });
 });
 
-describe('round 3 #2: what callers see before finality', () => {
+describe('what callers see before finality', () => {
   test('finality: waitMined returns the receipt as soon as it is seen, while the cap still holds the maximum', async () => {
     const { db, cap, node, queue, sent } = await oneSend({ node: { finalized: 90n } });
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash));
@@ -280,4 +280,16 @@ describe('round 3 #2: what callers see before finality', () => {
 test('finality: the fake chain names a block by fork and height', () => {
   assert.notEqual(blockHash(101n), blockHash(101n, 1));
   assert.equal(blockHash(101n), blockHash(101));
+});
+
+test('finality: a send marked confirming stores its receipt outcome (success or reverted) from the first receipt', async () => {
+  for (const outcome of ['success', 'reverted']) {
+    const { db, node, queue, sent } = await oneSend({ node: { finalized: 100n } });
+    node.state.receipts[sent.hash] = inBlock(node, { ...receipt(sent.hash, 50n, 2n, 101n), status: outcome });
+    node.state.block = 102n;
+    await queue.tick();
+    const row = db.listPending()[0];
+    assert.equal(row.status, 'confirming', outcome);
+    assert.equal(row.receiptStatus, outcome);
+  }
 });

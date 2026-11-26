@@ -1,6 +1,6 @@
-// 25-28 dedupe round (orchestrator 2026-11-09, round-2 Q4): every 502 the relayer answers before any broadcast says
+// Every 502 the relayer answers before any broadcast says
 // so with `"broadcast": false`, so gas_sponsor can map it to Unavailable (nothing sent). Any 502 without it (a proxy's,
-// say) stays OutcomeUnknown there. After a broadcast the relayer never answers 502 (round 2, MEDIUM 5).
+// say) stays OutcomeUnknown there. After a broadcast the relayer never answers 502.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadNetworks } from '../../src/config.js';

@@ -1,4 +1,4 @@
-// Bond reclaim on a fork (25-07 Task 3, TM-82). The relayer answers a Reality question with a bond; once the question
+// Bond reclaim on a fork (TM-82). The relayer answers a Reality question with a bond; once the question
 // finalizes, reclaim.js rebuilds the answer history from LogNewAnswer events, claims the winnings, withdraws them and
 // credits the spend cap. FORK_NETWORK picks the fork (ethereum_sepolia by default).
 import { after, before, describe, test } from 'node:test';
@@ -105,7 +105,7 @@ describe('reclaim (fork)', () => {
     assert.equal(await pub.getTransactionCount({ address: relayer.relayer, blockTag: 'pending' }), nonceBefore);
 
     await finalize(q.questionId);
-    // The cap settles a receipt once its block is finalized (25-28 round 3, #2).
+    // The cap settles a receipt once its block is finalized.
     await settleSends(pub, relayer);
     const spentBefore = BigInt(relayer.cap.status().spentDayWei);
 
@@ -164,7 +164,7 @@ describe('reclaim (fork)', () => {
     const q = await answeredQuestion();
     await challenge(q.questionId, NO, GROUP.bond * 2n);
     await finalize(q.questionId);
-    // The cap settles a receipt once its block is finalized (25-28 round 3, #2).
+    // The cap settles a receipt once its block is finalized.
     await settleSends(pub, relayer);
     const spentBefore = BigInt(relayer.cap.status().spentDayWei);
     const nonceBefore = await pub.getTransactionCount({ address: relayer.relayer, blockTag: 'pending' });

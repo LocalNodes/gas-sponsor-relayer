@@ -1,4 +1,4 @@
-// The wrong-answer watcher against a stubbed chain and a canned hub (25-08, D-16, TM-83, TM-84): what it challenges,
+// The wrong-answer watcher against a stubbed chain and a canned hub (D-16, TM-83, TM-84): what it challenges,
 // what it leaves alone, how it behaves at the cap's edge, and what it reports. The fork test covers the real contracts.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -179,7 +179,7 @@ describe('watcher', () => {
       assert.equal(row.fromBlock, 900n, 'the history starts at the block the question was asked in');
     }));
 
-  test('watcher: the in-flight mark is written before the challenge\'s bond is stored (25-28 dedupe, round-2 Q6)',
+  test('watcher: the in-flight mark is written before the challenge\'s bond is stored',
     withWorld({}, async (w) => {
       const { questionId } = w.ask({ hub: null });
       const insert = w.db.insertQuestion;
@@ -193,7 +193,7 @@ describe('watcher', () => {
       assert.equal(flaggedWhenStored, true, 'the mark that stops a second challenge comes first');
     }));
 
-  test('watcher: storing the challenge fails after its broadcast: the next tick does not challenge again (25-28 dedupe, round-2 Q6)',
+  test('watcher: storing the challenge fails after its broadcast: the next tick does not challenge again',
     withWorld({}, async (w) => {
       w.ask({ hub: null });
       const insert = w.db.insertQuestion;

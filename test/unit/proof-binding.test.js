@@ -1,4 +1,4 @@
-// 25-28 round 3, #3 (Codex round 3 HIGH 3): the release proof is bound to the finalized chain.
+// The release proof is bound to the finalized chain.
 // The proof read the finalized block's number and dropped its hash. The block it then found by number, and the
 // transaction in it, were never tied to that finalized block, so one endpoint that answered with two different blocks
 // at one height could release a send whose own transaction had mined.
@@ -34,8 +34,8 @@ const held = ({ db, cap }, name) => {
   assert.equal(spentDay(cap), 1000n, name);
 };
 
-describe('round 3 #3: the release proof is bound to the finalized chain', () => {
-  test('proof-binding: Codex repro: finalized block 105 is hash A holding our own transaction; block 105 read by number is hash B holding another at nonce 5: nothing is released', async () => {
+describe('the release proof is bound to the finalized chain', () => {
+  test('proof-binding: repro: finalized block 105 is hash A holding our own transaction; block 105 read by number is hash B holding another at nonce 5: nothing is released', async () => {
     const ctx = await oneSend();
     const { node, queue, sent } = ctx;
     // Fork 0 (hash A at 105) holds our own transaction; fork 1 (hash B at 105) holds another one with the same nonce.

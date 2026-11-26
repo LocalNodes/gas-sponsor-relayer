@@ -101,7 +101,7 @@ describe('reclaim', () => {
 
   test('reclaim: a bond with no entry left (its send was replaced) reports 0 credited and an audit line says why', async () => {
     const t = claimedQuestion({ balance: 10n, withdrawStatus: 'success' });
-    // The bond's send was replaced and its reservation given back (25-28 fix A): no bond entry is left.
+    // The bond's send was replaced and its reservation given back: no bond entry is left.
     t.db.deleteSpend(t.db.findSpend(t.bondRef, 'bond').id);
     const [r] = await t.reclaim.tick();
     assert.equal(r.outcome, 'done');

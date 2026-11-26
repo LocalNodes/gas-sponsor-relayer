@@ -1,4 +1,4 @@
-// 25-28 fix round 2, HIGH 3 (Codex round 2, ruling (a)): an unresolved reservation counts against the current day and
+// An unresolved reservation counts against the current day and
 // month windows until it is settled or released, whatever time it was made. Each fee-bump increase is a ledger entry
 // of its own, at the time it was checked. A settled send counts from the time it was settled.
 import { describe, test } from 'node:test';
@@ -17,8 +17,8 @@ function ledger({ dayWei, monthWei, at = OCT31 }) {
   return { db, clock, cap };
 }
 
-describe('round 2 HIGH 3: unresolved reservations stay in the current windows', () => {
-  test('cap-windows: Codex repro: at a 1,200 cap a reservation made before the day and month boundaries still counts after them, so live liability never passes 1,200', () => {
+describe('unresolved reservations stay in the current windows', () => {
+  test('cap-windows: repro: at a 1,200 cap a reservation made before the day and month boundaries still counts after them, so live liability never passes 1,200', () => {
     const { cap, clock } = ledger({ dayWei: 1200n, monthWei: 1200n });
     const old = cap.reserve(CHAIN, 1000n);
     clock.t = NOV2;
@@ -101,7 +101,7 @@ describe('round 2 HIGH 3: unresolved reservations stay in the current windows', 
   });
 });
 
-describe('round 2 HIGH 3: fee bumps across boundaries, through the queue', () => {
+describe('fee bumps across boundaries, through the queue', () => {
   test('cap-windows: a value-bearing send reserved in October and bumped in November: the bump is checked against November with the October reservation in it', async () => {
     // gas 100 x maxFee 10 + value 500 = 1,500 reserved; the bump's maximum is 100 x 12 + 500 = 1,700.
     const clock = { t: OCT31 };

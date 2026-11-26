@@ -1,6 +1,6 @@
 // A front-run wrong answer is challenged within one watcher tick, finalizes against the attacker, and the attacker's
 // transaction never executes (D-16, OQ-3, TM-83). Nobody acts besides the relayer's own watcher.
-// FORK_NETWORK picks the fork (ethereum_sepolia by default); 25-26 runs the same flow on Base Sepolia.
+// FORK_NETWORK picks the fork (ethereum_sepolia by default); FORK_NETWORK=base_sepolia runs the same flow on Base Sepolia.
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -49,7 +49,7 @@ describe('watcher (fork)', () => {
     });
     reality = relayer.networks[String(CHAIN_ID)].reality;
     // Anvil's well-known keys are swept on public chains; the fork's copy of the relayer account can carry an EIP-7702
-    // delegation. A fresh relayer key has no code, so clear it (25-07 finding).
+    // delegation. A fresh relayer key has no code, so clear it.
     await pub.request({ method: 'anvil_setCode', params: [relayer.relayer, '0x'] });
     group = await createGroup(pub, wallet);
     await registerGroup(relayer, group);

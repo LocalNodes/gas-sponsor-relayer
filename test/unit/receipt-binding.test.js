@@ -1,13 +1,13 @@
-// 25-28 fix round 4 (Codex round 4 HIGH 1, HIGH 2 and MEDIUM 4; Flash round 4's two LOWs; the orchestrator's ruling).
-// - HIGH 1: every path that settles a send or marks it confirming binds the receipt to the transaction, as the release
+// The receipt binding, unsponsored chains, the block cache and boot:
+// - every path that settles a send or marks it confirming binds the receipt to the transaction, as the release
 //   proof does: the block at the receipt's height lists the send's own transaction by hash, and the transaction's and
 //   the receipt's blockHash and blockNumber are that block's. A receipt read for one hash must be that hash's.
 //   Contradictory evidence leaves the send unresolved, its whole maximum held.
-// - HIGH 2: on a chain the relayer does not sponsor, a stored send is held read-only: receipts and the proof still
+// - on a chain the relayer does not sponsor, a stored send is held read-only: receipts and the proof still
 //   run, its reservation stays, and nothing is broadcast again or bumped.
-// - MEDIUM 4: a block read by hash at another height than expected is never kept, so a later pass reads it again.
-// - LOW 1: a send found reorged at boot waits a full bump interval from the boot head.
-// - LOW 2: boot recovery clears a recovered row's block hash with the rest of its receipt.
+// - a block read by hash at another height than expected is never kept, so a later pass reads it again.
+// - a send found reorged at boot waits a full bump interval from the boot head.
+// - boot recovery clears a recovered row's block hash with the rest of its receipt.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CapReached, createCap } from '../../src/cap.js';
@@ -29,8 +29,8 @@ async function oneSend(o = {}) {
   return { ...ctx, sent };
 }
 
-describe('round 4: Flash LOWs', () => {
-  test('round 4 LOW 1: a confirming send found reorged at boot waits a full bump interval from the boot head', async () => {
+describe('boot: a reorg found at boot and boot recovery', () => {
+  test('boot: a confirming send found reorged at boot waits a full bump interval from the boot head', async () => {
     const ctx = await oneSend({ node: { finalized: 90n } });
     const { db, node, sent } = ctx;
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash));
@@ -49,7 +49,7 @@ describe('round 4: Flash LOWs', () => {
     assert.equal(node.state.sent.length, 1, 'not bumped at once');
   });
 
-  test('round 4 LOW 2: boot recovery clears the recovered row\'s block hash', async () => {
+  test('boot: boot recovery clears the recovered row\'s block hash', async () => {
     const ctx = await oneSend();
     const { db, sent } = ctx;
     const row = db.listPending()[0];
@@ -74,8 +74,8 @@ function takenAt(node, block = 103n, finalized = 110n) {
   node.state.finalized = finalized;
 }
 
-describe('round 4 MEDIUM 4: a wrong-height block is never kept', () => {
-  test('round 4 MEDIUM 4: Codex repro: one wrong-height answer to a read by hash, then correct ones: the proof completes', async () => {
+describe('a wrong-height block is never kept', () => {
+  test('block cache: repro: one wrong-height answer to a read by hash, then correct ones: the proof completes', async () => {
     const ctx = await oneSend();
     const { db, cap, node, queue } = ctx;
     takenAt(node);
@@ -104,8 +104,8 @@ const unsponsored = (node) => ({
   },
 });
 
-describe('round 4 HIGH 2: on a chain not sponsored, a stored send is held read-only', () => {
-  test('round 4 HIGH 2: Codex repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it', async () => {
+describe('on a chain not sponsored, a stored send is held read-only', () => {
+  test('not sponsored: repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it', async () => {
     const ctx = await oneSend();
     const { db, node, sent } = ctx;
     assert.equal(node.state.sent.length, 1);
@@ -132,7 +132,7 @@ describe('round 4 HIGH 2: on a chain not sponsored, a stored send is held read-o
     assert.equal(spentDay(cap), 150n);
   });
 
-  test('round 4 HIGH 2: on a chain not sponsored, a stored send another transaction replaced is still released by the proof', async () => {
+  test('not sponsored: on a chain not sponsored, a stored send another transaction replaced is still released by the proof', async () => {
     const ctx = await oneSend();
     const { db, node } = ctx;
     const events = createEvents({ db });
@@ -146,8 +146,8 @@ describe('round 4 HIGH 2: on a chain not sponsored, a stored send is held read-o
   });
 });
 
-describe('round 4 HIGH 1: every settlement binds the receipt to the transaction', () => {
-  test('round 4 HIGH 1: Codex repro: our own transaction is in finalized block 103, its receipt names canonical block 104 for 1 wei: nothing settles, and no second 999 fits', async () => {
+describe('every settlement binds the receipt to the transaction', () => {
+  test('binding: repro: our own transaction is in finalized block 103, its receipt names canonical block 104 for 1 wei: nothing settles, and no second 999 fits', async () => {
     const ctx = await oneSend({ dayWei: 1000n, monthWei: 1000n });
     const { db, cap, node, queue, sent } = ctx;
     node.state.mined.push({ hash: sent.hash, nonce: 5, block: 103n });
@@ -165,7 +165,7 @@ describe('round 4 HIGH 1: every settlement binds the receipt to the transaction'
     assert.equal(node.state.sent.length, 1, 'a send with a receipt is not bumped');
   });
 
-  test('round 4 HIGH 1: Codex repro: the lookup of our hash returns an unrelated transaction\'s receipt: nothing settles', async () => {
+  test('binding: repro: the lookup of our hash returns an unrelated transaction\'s receipt: nothing settles', async () => {
     const ctx = await oneSend({ dayWei: 1000n, monthWei: 1000n });
     const { db, cap, node, queue, sent } = ctx;
     // An unrelated transaction (another sender), really in block 101, its receipt coherent on its own.
@@ -184,7 +184,7 @@ describe('round 4 HIGH 1: every settlement binds the receipt to the transaction'
     assert.throws(() => cap.reserve(CHAIN, 999n), CapReached);
   });
 
-  test('round 4 HIGH 1: a confirming send whose block no longer lists its transaction (the same block hash) does not settle at finality', async () => {
+  test('binding: a confirming send whose block no longer lists its transaction (the same block hash) does not settle at finality', async () => {
     const ctx = await oneSend({ node: { finalized: 90n } });
     const { db, cap, node, queue, sent } = ctx;
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash)); // block 101, which lists it
@@ -202,7 +202,7 @@ describe('round 4 HIGH 1: every settlement binds the receipt to the transaction'
     assert.ok(!db.listEvents().some((e) => e.kind === 'send_reorged'), 'contradiction, not a reorg');
   });
 
-  test('round 4 HIGH 1: the transaction listed in the block must name that block, by hash and by height', async () => {
+  test('binding: the transaction listed in the block must name that block, by hash and by height', async () => {
     const cases = {
       'another block hash': { txBlockHash: (t) => blockHash(t.blockNumber, 7) },
       'no block hash': { txBlockHash: () => undefined },
@@ -224,7 +224,7 @@ describe('round 4 HIGH 1: every settlement binds the receipt to the transaction'
     }
   });
 
-  test('round 4 HIGH 1: a coherent receipt still settles at finality (the binding holds)', async () => {
+  test('binding: a coherent receipt still settles at finality (the binding holds)', async () => {
     const ctx = await oneSend();
     const { db, cap, node, queue, sent } = ctx;
     node.state.receipts[sent.hash] = inBlock(node, receipt(sent.hash)); // 150 wei in block 101, which lists it
@@ -234,8 +234,8 @@ describe('round 4 HIGH 1: every settlement binds the receipt to the transaction'
   });
 });
 
-describe('round 4 HIGH 1: guard tests (one guard each, where another guard would mask it)', () => {
-  test('round 4 HIGH 1: a receipt of another transaction is no answer: the proof still releases a send another transaction replaced', async () => {
+describe('guard tests (one guard each, where another guard would mask it)', () => {
+  test('binding: a receipt of another transaction is no answer: the proof still releases a send another transaction replaced', async () => {
     const ctx = await oneSend();
     const { db, cap, node, queue, sent } = ctx;
     const UNRELATED = `0x${'cd'.repeat(32)}`;
@@ -248,7 +248,7 @@ describe('round 4 HIGH 1: guard tests (one guard each, where another guard would
     assert.equal(spentDay(cap), 0n);
   });
 
-  test('round 4 HIGH 1: a confirming row whose stored hash is not one of its own (a damaged database) never settles', async () => {
+  test('binding: a confirming row whose stored hash is not one of its own (a damaged database) never settles', async () => {
     const ctx = await oneSend();
     const { db, cap, node, queue } = ctx;
     // OTHER is really in block 101, with a coherent receipt; the row says it is this send's.

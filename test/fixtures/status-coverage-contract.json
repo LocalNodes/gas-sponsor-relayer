@@ -1,0 +1,115 @@
+{
+  "_about": [
+    "The status-coverage contract between the gas_sponsor client (Drupal) and gas-sponsor-relayer.",
+    "The same bytes are committed in each repository's tests. Change them in both or neither.",
+    "GET /status carries one mark per network: chains[<chainId>].covered. It is JSON true or JSON false, and it is present on every network entry, including one that reads {\"error\":\"unreachable\"}.",
+    "SponsorStatus::coversSafe(chainId, safe) is true only when that mark is exactly JSON true AND the fund is in groups or createdFunds for that chain. Every other case is false: a false mark, a missing mark, a mark of any other type, a chain id of 0 or below, a network that is not listed. A status with a wrong mark still parses.",
+    "The mark has three states, read by SponsorStatus::coverage(chainId), and each query says which in mark: covered (exactly JSON true), not_covered (JSON false, a network that is not listed, or a chain id of 0 or below), not_said (a listed network whose mark is missing or not a JSON boolean). not_said is never not_covered: a site waits and retries on it and never offers anyone to pay the fee.",
+    "Each case builds a status answer from base plus its own chains, groups and createdFunds. queries lists what coversSafe answers for each (chainId, safe), and the network's mark."
+  ],
+  "base": {
+    "configured": true,
+    "address": "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720",
+    "community": "Test Community",
+    "cap": {
+      "dayWei": "50000000000000000",
+      "monthWei": "500000000000000000",
+      "spentDayWei": "0",
+      "spentMonthWei": "0",
+      "dayResetsAt": "2026-11-09T09:30:12.000Z",
+      "monthResetsAt": "2026-12-01T00:00:00.000Z",
+      "monthStartsAt": "2026-11-01T00:00:00.000Z"
+    }
+  },
+  "fund": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe",
+  "cases": {
+    "a-listed-fund-on-a-network-marked-false": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": false } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" } ]
+    },
+    "a-created-fund-on-a-network-marked-false": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": false } },
+      "groups": [],
+      "createdFunds": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe" } ],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" } ]
+    },
+    "b-listed-fund-on-a-network-marked-true": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": true } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [
+        {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": true, "mark": "covered" },
+        {"chainId": 11155111, "safe": "0x1111111111111111111111111111111111111111", "covers": false, "mark": "covered" }
+      ]
+    },
+    "b-created-fund-on-a-network-marked-true": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": true } },
+      "groups": [],
+      "createdFunds": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe" } ],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": true, "mark": "covered" } ]
+    },
+    "b-unreachable-network-marked-true": {
+      "chains": { "11155111": { "error": "unreachable", "covered": true } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": true, "mark": "covered" } ]
+    },
+    "a-unreachable-network-marked-false": {
+      "chains": { "11155111": { "error": "unreachable", "covered": false } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" } ]
+    },
+    "c-no-mark": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0 } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe" } ],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "c-no-mark-on-an-unreachable-network": {
+      "chains": { "11155111": { "error": "unreachable" } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "d-mark-null": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": null } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "d-mark-the-string-true": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": "true" } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "d-mark-the-number-1": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": 1 } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "d-mark-the-number-0": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": 0 } },
+      "groups": [ { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null } ],
+      "createdFunds": [],
+      "queries": [ {"chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_said" } ]
+    },
+    "other-chain-ids-and-unlisted-networks": {
+      "chains": { "11155111": { "balanceWei": "42000000000000000", "pending": 0, "covered": true } },
+      "groups": [
+        { "chainId": 11155111, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null },
+        { "chainId": 84532, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "space": "garden-tools.eth", "community": "Test Community", "module": null }
+      ],
+      "createdFunds": [],
+      "queries": [
+        {"chainId": 84532, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" },
+        {"chainId": 0, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" },
+        {"chainId": -1, "safe": "0x5aFE5aFe5aFE5afe5AFe5aFE5AfE5AFe5afe5Afe", "covers": false, "mark": "not_covered" }
+      ]
+    }
+  }
+}

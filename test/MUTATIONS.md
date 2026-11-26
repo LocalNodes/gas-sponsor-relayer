@@ -1,159 +1,122 @@
-# Mutation run: spend-safety rules (25-28 fix round 2, MEDIUM 7; rounds 3, 4 and 5, and the dedupe round)
+# Mutation run: spend-safety and fee rules
 
-Produced by `node scripts/mutate.mjs --markdown` (`npm run mutate` prints the same as a list). Each row breaks one
-rule by replacing one exact text in `src/` or `config/` (the `find` and `replace` of each mutation are in
-`scripts/mutate.mjs`), runs the whole unit suite (`test/unit/*.test.js`), and restores the file. "Failing tests" is
-how many unit tests failed with the mutation in place; the last column names the first of them. A mutation no test
-catches would read **SURVIVED** and make the run exit 1.
+Produced by `npm run mutate -- --markdown` (`node scripts/mutate.mjs --markdown`; `npm run mutate` prints the same as
+a list). Each row breaks one rule by replacing one exact text in `src/` or `config/` (the `find` and `replace` of each
+mutation are in `scripts/mutate.mjs`), runs the whole unit suite (`test/unit/*.test.js`), and restores the file.
+"Failing tests" is how many unit tests failed with the mutation in place; the last column names the first of them. A
+mutation no test catches would read **SURVIVED** and make the run exit 1.
 
-Run at relayer commit `a1499c1` (branch `dedupe`) with the dedupe-round `scripts/mutate.mjs` (committed with this
-file; src as of `dad0742`), 2026-11-11, Node 24, no network.
+"Item" groups the mutations by the part of the service they guard. Ids are never reused. M153 and M225 belonged to
+mutations whose rules the service no longer has; M212-M222 and M229-M239 were never assigned.
 
-History:
-- Round 2: the first pass over 38 mutations (before `641ae6c`) left M7, M8 and M21 surviving. The holds and checks
-  they remove were each also covered by a second layer (the resend hold; the block-contents check), so no test saw
-  them alone. `641ae6c` added the tests that do.
-- Round 3 added M39 to M79, one per new guard (items #1 to #5 of the round 3 ruling), and moved the `find` of M8,
-  M19, M27 and M31 to the round 3 text of the same rules. The first round 3 pass left M69 (the read client's
-  receipt trusted without the proof endpoint) surviving: the mutant marked the send confirming and the proof
-  endpoint's read sent it straight back to pending, so the test's end state looked right. `ee4b12f` made the test
-  check that such a receipt never marks the send confirming. Every later run catches all 79.
-- Round 4 added M80 to M91, one per new guard (HIGH 1, HIGH 2, MEDIUM 4 and Flash's two LOWs of the round 4
-  ruling), and moved the `find` of M62 (the reorg is now ownIn's 'moved') and M69 (seen now reads `found.hash`).
-  The binding then masked M69 in the fake node, which listed a transaction only from the proof endpoint's receipts:
-  `10a13a7` lists it from either endpoint's receipt, as a real block does, and the round 3 test catches it again.
-  findReceipt's hash check (M80) and ownIn's own-hash check (M81) mask each other in the repros, so each has its own
-  guard test (`ae39e8b`). Both full runs of this round catch all 91.
-- Round 5 (Codex round 5 INTRODUCED HIGH): `69fa036` stopped the fake node listing a transaction from its receipt,
-  so every test states the binding (`inBlock`); that run caught all 91. `2a3f708` (RED) and `25d148f` (GREEN) hold a
-  replaced send again at the top of `seen()`, before the binding read, and remove `markConfirming()`'s unreachable
-  `reversed` branch. The `find` of M53 (now: holding a replaced send again is not one transaction), M57 (onMined
-  before the re-hold is stored) and M67 (the reservation not reopened) moved to the re-hold, and M68's `find` now
-  names the reorg's event so it matches once (the re-hold writes the same `sentBlock` text). M92 removes the re-hold.
-  The full run catches all 92.
+To check the table, run `node scripts/mutate.mjs --check` (every `find` occurs exactly once; runs no tests), then
+`npm run mutate -- --markdown` and compare its output with the table below. A full run takes about half an hour.
 
-- Dedupe round (orchestrator 2026-11-11): `6196d1f` makes `confirm()` re-read the consumer proof before it settles
-  (Codex round-5 re-check MEDIUM); `7235601` makes `finalBlocks()` list only stated inclusions (the LOW). Round-5 Q2
-  (b) adds M93 (notify before markConfirming stores confirming), M94-M98 (the re-hold's sentBlock, consumedBy,
-  consumedBlock, minedBlockHash and its event) and M99 (the MEDIUM check removed). M97 is equivalent on any row the
-  relayer itself writes (`replace()` never sets a block hash), so its test seeds an older row. M57 is now caught by 2
-  tests. The full run catches all 99.
-- Dedupe round, second half (orchestrator 2026-11-11): M100-M123 cover the code added since `8c2cbfd`: the held reason
-  logged once and cleared on a reorg (M100, M101), `needsOperator` (M102, M103), the recheck body (M104), the nonce
-  from both pending counts (M105, M106), the watcher's in-flight mark order (M107), the walk cache floor (M108, M109),
-  `broadcast: false` at each 502 site (M110-M117: two in the pipeline, three in safe-exec, two in Reality, one in
-  ENS), and the duplicate answer of `dad0742` (M118 status, M119 the queue check, M120 and M121 the reservation given
-  back, M122 the Safe nonce in the key, M123 the question stored once). Run alone, five survived: M101, M107, M109,
-  M115 and M117. Each got the smallest test that catches it (a reorg clears the held reason; a confirming send's walk
-  longer than the kept-blocks limit settles; the in-flight mark is written before the bond is stored; a hub error on a
-  Reality step is a 502 with `broadcast: false`; an unreadable ENS name check is too). The first full run reported
-  M68 and M79 as errors: their `find` no longer matched (the held-reason clear now sits in the reorg, and the walk cache
-  is pruned below the lowest unresolved send instead of cleared past a size), so `a1499c1` moved both to the current
-  text. No mutation was dropped as equivalent. The full run catches all 123.
+The table below is one full run on Node 24.21.0 (major 24) with no network, against the source and tests of the commit that carries this file.
 
-Baseline: 330 tests pass, 0 fail. Mutations: 123, caught: 123, survived: 0.
+Baseline: 541 tests pass, 0 fail. Mutations: 237, caught: 237, survived: 0.
 
 | Id | Item | File | Rule the mutation breaks | Failing tests | Caught by (first failing test) |
 |---|---|---|---|---|---|
-| M1 | HIGH 1 | `src/chain.js` | the wallet broadcasts through the fallback transport | 2 | broadcast: createChains gives the wallet one endpoint with no retry; reads keep the fallback; proofs read that one endpoint |
-| M2 | HIGH 1 | `src/chain.js` | the broadcast endpoint retries | 1 | broadcast: createChains gives the wallet one endpoint with no retry; reads keep the fallback; proofs read that one endpoint |
-| M3 | HIGH 1 | `src/queue.js` | an unrecognised broadcast error counts as a refusal | 7 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
-| M4 | HIGH 1 | `src/queue.js` | a refusal is believed without the node's JSON-RPC code | 1 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
-| M5 | HIGH 1 | `src/queue.js` | "already known" is not treated as accepted | 1 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
-| M6 | HIGH 2 | `src/queue.js` | the first broadcast does not hold its row | 3 | serialise: Codex repro: while the first answer is delayed, 12 blocks pass and the poll loop runs: no fee bump is sent |
-| M7 | HIGH 2 | `src/queue.js` | the poll loop acts on a row whose broadcast is on its way | 1 | serialise: the poll loop and reconcile leave a row alone while its first answer is outstanding, even with its receipt visible |
-| M8 | HIGH 2 | `src/queue.js` | reconcile acts on a row whose broadcast is on its way | 1 | serialise: the poll loop and reconcile leave a row alone while its first answer is outstanding, even with its receipt visible |
-| M9 | HIGH 2 | `src/queue.js` | a refusal deletes the row whatever newer state it has | 1 | serialise: Codex repro: a replacement accepted while the original's answer was delayed survives the original's refusal, with the row and the reservation |
-| M10 | HIGH 2 | `src/db.js` | the guarded delete ignores the row's newer state | 1 | serialise: Codex repro: a replacement accepted while the original's answer was delayed survives the original's refusal, with the row and the reservation |
-| M11 | HIGH 2 | `src/queue.js` | the poll loop acts on the row as it was listed, not as it is | 1 | serialise: a row the poll loop listed, then deleted by its first broadcast's refusal while the loop waited, is never acted on |
-| M12 | HIGH 3 | `src/cap.js` | unresolved reservations count only by their own time | 84 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
-| M13 | HIGH 3 | `src/db.js` | an unresolved reservation counts in the settled-by-time list too | 76 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
-| M14 | HIGH 3 | `src/cap.js` | a bump increase is written back into the old reservation | 2 | cap-windows: each bump increase is its own entry, at the time it was checked; the reservation keeps its own time |
-| M15 | HIGH 3 | `src/cap.js` | a bump increase is not checked against the cap | 4 | cap-windows: a bump increase is checked against the current windows, which hold the old unresolved reservation |
-| M16 | HIGH 3 | `src/cap.js` | a settled send keeps the time it was reserved | 2 | cap-windows: a send settled after a boundary counts in the window it was settled in, not the one it was reserved in |
-| M17 | HIGH 3 | `src/db.js` | release also gives back settled spend | 1 | cap-windows: a released reservation and its increases stop counting; a settled cost is never given back |
-| M18 | HIGH 3 | `src/cap.js` | a released or settled reservation can be raised | 1 | cap-windows: only an unresolved reservation can be raised; a released or settled one cannot |
-| M19 | HIGH 3 | `src/queue.js` | at boot, reservations of waiting sends are released as orphans | 7 | atomic-settle: releaseOrphans gives back only a reservation no send row holds, whatever the row's status |
-| M20 | HIGH 3 | `src/cap.js` | dayResetsAt counts unresolved reservations | 1 | cap-windows: dayResetsAt comes from settled spend only, never from an old unresolved reservation |
-| M21 | HIGH 4 | `src/queue.js` | (i) the nonce count at the finalized block is not checked | 1 | release-proof: conflicting or missing reads leave the send unresolved |
-| M22 | HIGH 4 | `src/queue.js` | (ii) the consuming transaction may be one of the send's own hashes | 5 | dedupe MEDIUM control: the same own inclusion at 108 with no other consumer settles to the real cost |
-| M23 | HIGH 4 | `src/queue.js` | (ii) the search ignores the first broadcast block | 1 | release-proof: conflicting or missing reads leave the send unresolved |
-| M24 | HIGH 4 | `src/queue.js` | (ii) the transaction found need not be from the relayer | 1 | release-proof: conflicting or missing reads leave the send unresolved |
-| M25 | HIGH 4 | `src/queue.js` | (i) the proof reads the latest block, not the finalized one | 24 | atomic-settle: Codex repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits |
-| M26 | HIGH 4 | `src/queue.js` | (iii) the proof reads the fallback client | 54 | atomic-settle: Codex repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits |
-| M27 | HIGH 4 | `src/queue.js` | (v) replaced sends are no longer looked up | 10 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M28 | HIGH 4 | `src/db.js` | (v) a late receipt does not undo a release | 10 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M29 | HIGH 4 | `src/queue.js` | receipts "not found" release the send (the old rule) | 43 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M30 | HIGH 4 | `src/server.js` | (vi) GET /sends/:hash shows a replaced send as pending | 1 | release-proof: GET /sends/:hash answers pending, then not_sent with the consuming hash; any of the send's hashes finds it; unknown is 404 |
-| M31 | MEDIUM 6 | `src/queue.js` | reconcile leaves stuck sends out | 2 | release-proof: at boot, a stuck send the node lost is sent again as its last signed replacement, and keeps its reservation |
-| M32 | MEDIUM 5 | `src/sends/pipeline.js` | pipeline: a recordSend failure after the broadcast fails the send | 2 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
-| M33 | MEDIUM 5 | `src/sends/safeExec.js` | safe-exec: a recordSend failure after the broadcast is a 500 | 1 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
-| M34 | MEDIUM 5 | `src/sends/reality.js` | reality: a failure after the broadcast is 502 read_failed | 1 | after-broadcast: POST /send/reality/answer: storing the question fails after the broadcast: 202 with the hash, not 502 read_failed |
-| M35 | MEDIUM 5 | `src/sends/ens.js` | ens: a recordSend failure after the broadcast fails the job | 1 | ens: recording a send fails after its broadcast: the job goes on and keeps the hash (25-28 round 2, MEDIUM 5) |
-| M36 | fix A | `src/queue.js` | a fee bump is sent without extending the reservation | 6 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M37 | fix A | `src/queue.js` | the row is stored after the broadcast, not before | 130 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
-| M38 | fix A | `src/sends/pipeline.js` | the reservation is given back after a send that may be live | 9 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
-| M39 | round 3 #4 | `config/networks.json` | Base Sepolia is sponsored again (the config flag is gone) | 2 | not-sponsored: config/networks.json turns sponsoring off for 84532 only; chain.js marks its clients |
-| M40 | round 3 #4 | `src/config.js` | chainIsSponsored ignores "sponsoring": false | 4 | not-sponsored: config/networks.json turns sponsoring off for 84532 only; chain.js marks its clients |
-| M41 | round 3 #4 | `src/chain.js` | chain.js marks every configured chain sponsored | 1 | not-sponsored: config/networks.json turns sponsoring off for 84532 only; chain.js marks its clients |
-| M42 | round 3 #4 | `src/queue.js` | the queue signs and sends on a chain not sponsored | 1 | not-sponsored: the queue itself refuses a send on a chain that is not sponsored, before signing |
-| M43 | round 3 #4 | `src/sends/pipeline.js` | the pipeline reserves on a chain not sponsored | 1 | not-sponsored: the pipeline (Reality steps, reclaim, the watcher's challenge) refuses before the reservation |
-| M44 | round 3 #4 | `src/sends/safeExec.js` | safe-exec reserves on a chain not sponsored | 1 | not-sponsored: POST /send/safe-exec on 84532 is 503 chain_not_sponsored before any reservation, estimate or broadcast |
-| M45 | round 3 #4 | `src/sends/reality.js` | the Reality routes run on a chain not sponsored | 1 | not-sponsored: POST /send/reality/* on a chain that is not sponsored is 503 chain_not_sponsored, nothing read or sent |
-| M46 | round 3 #4 | `src/sends/ens.js` | ENS starts a job on a chain not sponsored | 1 | not-sponsored: POST /send/ens on a chain with ENS but sponsoring off is 503 chain_not_sponsored, no job |
-| M47 | round 3 #5 | `src/db.js` | nonce allocation forgets stuck sends | 1 | nonce-binding: Codex repro: a stuck send the node forgot keeps nonce 5; the next send gets 6, not 5 |
-| M48 | round 3 #5 | `src/sends/pipeline.js` | pipeline.waitMined takes the newest row at the nonce | 2 | nonce-binding: Codex repro: sends A and B both at nonce 5, B mined: waitMined(A) never returns B's receipt |
-| M49 | round 3 #5 | `src/sends/ens.js` | the ENS job's waiter takes the newest row at the nonce | 1 | ens: round 3 \#5, Codex repro: another send at the same nonce mined; the job never takes its receipt for its own step |
-| M50 | round 3 #5 | `src/sends/pipeline.js` | a waiter does not follow its own send's fee bumps | 1 | nonce-binding: waitMined follows the send's own fee bumps (its row's hashes), whatever its nonce now holds |
-| M51 | round 3 #1 | `src/queue.js` | a settlement is not one transaction | 1 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M52 | round 3 #1 | `src/queue.js` | a release is not one transaction | 1 | atomic-settle: a crash between the steps of a release leaves the send unresolved with its reservation; the next pass releases it once |
-| M53 | round 3 #1 | `src/queue.js` | holding a replaced send again is not one transaction | 1 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M54 | round 3 #1 | `src/queue.js` | going back on a reorg is not one transaction | 1 | atomic-settle: a crash while a reorged send goes back to pending leaves it confirming with its maximum; the next pass moves it once |
-| M55 | round 3 #1 | `src/queue.js` | boot releases a reservation held by a mined or replaced row (only pending and stuck rows hold one) | 1 | finality: reconcile at boot keeps a confirming send, never rebroadcasts it, and settles it once final |
-| M56 | round 3 #1 | `src/queue.js` | boot does not recover a mined or replaced row with an open reservation | 3 | atomic-settle: at boot a mined row with an open reservation is settled from its receipt |
-| M57 | round 3 #1 | `src/queue.js` | onMined runs before the change is stored (a replaced send held again) | 2 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M58 | round 3 #2 | `src/queue.js` | a receipt settles at once (the old rule) | 27 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M59 | round 3 #2 | `src/queue.js` | a confirming send settles before its block is finalized | 20 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M60 | round 3 #2 | `src/queue.js` | a receipt that is gone is not a reorg | 7 | atomic-settle: a crash while a reorged send goes back to pending leaves it confirming with its maximum; the next pass moves it once |
-| M61 | round 3 #2 | `src/queue.js` | a receipt that names another block is not a reorg | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
-| M62 | round 3 #2 | `src/queue.js` | another block at the receipt's height is not a reorg | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
-| M63 | round 3 #2 | `src/queue.js` | a receipt block off the finalized chain settles anyway | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
-| M64 | round 3 #2 | `src/queue.js` | the poll loop leaves confirming sends out | 14 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M65 | round 3 #2 | `src/queue.js` | reconcile rebroadcasts a confirming send | 2 | finality: reconcile at boot keeps a confirming send, never rebroadcasts it, and settles it once final |
-| M66 | round 3 #2 | `src/db.js` | nonce allocation forgets confirming sends | 1 | finality: a confirming send keeps its nonce: the next send never takes it |
-| M67 | round 3 #2 | `src/queue.js` | a replaced send whose receipt appears is not held again | 9 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M68 | round 3 #2 | `src/queue.js` | the bump timer does not restart after a reorg | 2 | finality: a send back to pending after a reorg is not bumped at once: its bump timer starts again at the head |
-| M69 | round 3 #2 | `src/queue.js` | the read client's receipt is trusted without the proof endpoint | 2 | finality: a receipt only the read client has (the proof endpoint has none yet) changes nothing, and the send is not bumped |
-| M70 | round 3 #2 | `src/server.js` | GET /sends/:hash says finalized for a confirming send | 1 | finality: GET /sends/:hash says mined with finalized false while it waits, then finalized true |
-| M71 | round 3 #2 | `src/server.js` | GET /sends/:hash shows a confirming send as pending | 1 | finality: GET /sends/:hash says mined with finalized false while it waits, then finalized true |
-| M72 | round 3 #3 | `src/queue.js` | the consuming block need not be on the finalized chain | 7 | proof-binding: Codex repro: finalized block 105 is hash A holding our own transaction; block 105 read by number is hash B holding another at nonce 5: nothing is released |
-| M73 | round 3 #3 | `src/queue.js` | the consuming transaction need not name its block | 1 | proof-binding: the consuming transaction must report the consuming block as its own |
-| M74 | round 3 #3 | `src/queue.js` | our own receipt need not name the consuming block | 1 | proof-binding: our own transaction in the consuming block settles only from a receipt that names that block |
-| M75 | round 3 #3 | `src/queue.js` | the finalized hash is not pinned (the walk starts from the block it checks) | 45 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
-| M76 | round 3 #3 | `src/queue.js` | a block read by hash need not be the block asked for | 1 | proof-binding: a block read by hash must be the block asked for, at the height expected |
-| M77 | round 3 #3 | `src/queue.js` | a block read by hash need not be at the height expected | 2 | proof-binding: a block read by hash must be the block asked for, at the height expected |
-| M78 | round 3 #3 | `src/queue.js` | the walk has no budget per pass | 1 | proof-binding: a walk longer than one pass's budget goes on in the next pass from where it stopped |
-| M79 | round 3 #3 | `src/queue.js` | blocks read by hash are not kept between passes | 3 | dedupe walk: a confirming send settles through a walk longer than the kept-blocks limit, over several passes |
-| M80 | round 4 #1 | `src/queue.js` | findReceipt takes a receipt of another transaction and follows its hash | 1 | round 4 HIGH 1: a receipt of another transaction is no answer: the proof still releases a send another transaction replaced |
-| M81 | round 4 #1 | `src/queue.js` | the binding accepts a hash that is not one of the send's own | 1 | round 4 HIGH 1: a confirming row whose stored hash is not one of its own (a damaged database) never settles |
-| M82 | round 4 #1 | `src/queue.js` | the block need not list the transaction (exactly once) | 4 | round 4 HIGH 1: Codex repro: our own transaction is in finalized block 103, its receipt names canonical block 104 for 1 wei: nothing settles, and no second 999 fits |
-| M83 | round 4 #1 | `src/queue.js` | the listed transaction need not name the block's hash | 1 | round 4 HIGH 1: the transaction listed in the block must name that block, by hash and by height |
-| M84 | round 4 #1 | `src/queue.js` | the listed transaction need not name the block's height | 1 | round 4 HIGH 1: the transaction listed in the block must name that block, by hash and by height |
-| M85 | round 4 #1 | `src/queue.js` | seen() marks confirming without the binding | 6 | dedupe Q2 (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again |
-| M86 | round 4 #1 | `src/queue.js` | confirm() settles a send whose block and receipt disagree about the transaction | 2 | round 4 HIGH 1: a confirming send whose block no longer lists its transaction (the same block hash) does not settle at finality |
-| M87 | round 4 #2 | `src/queue.js` | reconcile rebroadcasts a stored send on a chain not sponsored | 1 | round 4 HIGH 2: Codex repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it |
-| M88 | round 4 #2 | `src/queue.js` | the poll loop bumps a stored send on a chain not sponsored | 1 | round 4 HIGH 2: Codex repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it |
-| M89 | round 4 MEDIUM 4 | `src/queue.js` | a block read by hash at the wrong height is kept | 1 | round 4 MEDIUM 4: Codex repro: one wrong-height answer to a read by hash, then correct ones: the proof completes |
-| M90 | round 4 LOW 1 | `src/queue.js` | reconcile gives resolve no head (a reorg found at boot keeps the old bump timer) | 1 | round 4 LOW 1: a confirming send found reorged at boot waits a full bump interval from the boot head |
-| M91 | round 4 LOW 2 | `src/queue.js` | boot recovery keeps the recovered row's block hash | 1 | round 4 LOW 2: boot recovery clears the recovered row's block hash |
-| M92 | round 5 HIGH | `src/queue.js` | a replaced send whose own receipt appears is not held again before the binding read (the re-hold removed) | 9 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M93 | dedupe Q2 | `src/queue.js` | onMined runs before markConfirming stores confirming | 1 | dedupe Q2: markConfirming stores confirming before onMined runs |
-| M94 | dedupe Q2 | `src/queue.js` | the re-hold keeps the old sentBlock (the bump timer does not restart) | 1 | round 5: a replaced send with a bound late receipt is held again, then confirming, and at finality stays held against the finalized OTHER (dedupe MEDIUM) |
-| M95 | dedupe Q2 | `src/queue.js` | the re-hold keeps the consuming hash | 2 | round 5: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled |
-| M96 | dedupe Q2 | `src/queue.js` | the re-hold keeps the consuming block | 2 | round 5: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled |
-| M97 | dedupe Q2 | `src/queue.js` | the re-hold keeps the block hash | 1 | dedupe Q2 (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again |
-| M98 | dedupe Q2 | `src/queue.js` | the re-hold writes no send_release_reversed event | 6 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
-| M99 | dedupe MEDIUM | `src/queue.js` | confirm() settles an own inclusion that contradicts the finalized consumer | 7 | dedupe MEDIUM: OTHER takes nonce 5 at 103, the own hash shows at 108; at finality the send does not settle and 1,000 stays held |
+| M1 | broadcast | `src/chain.js` | the wallet broadcasts through the fallback transport | 2 | broadcast: createChains gives the wallet one endpoint with no retry; reads keep the fallback; proofs read that one endpoint |
+| M2 | broadcast | `src/chain.js` | the broadcast endpoint retries | 1 | broadcast: createChains gives the wallet one endpoint with no retry; reads keep the fallback; proofs read that one endpoint |
+| M3 | broadcast | `src/queue.js` | an unrecognised broadcast error counts as a refusal | 9 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
+| M4 | broadcast | `src/queue.js` | a refusal is believed without the node's JSON-RPC code | 2 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
+| M5 | broadcast | `src/queue.js` | "already known" is not treated as accepted | 2 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
+| M6 | one broadcast per row | `src/queue.js` | the first broadcast does not hold its row | 3 | serialise: repro: while the first answer is delayed, 12 blocks pass and the poll loop runs: no fee bump is sent |
+| M7 | one broadcast per row | `src/queue.js` | the poll loop acts on a row whose broadcast is on its way | 1 | serialise: the poll loop and reconcile leave a row alone while its first answer is outstanding, even with its receipt visible |
+| M8 | one broadcast per row | `src/queue.js` | reconcile acts on a row whose broadcast is on its way | 1 | serialise: the poll loop and reconcile leave a row alone while its first answer is outstanding, even with its receipt visible |
+| M9 | one broadcast per row | `src/queue.js` | a refusal deletes the row whatever newer state it has | 1 | serialise: repro: a replacement accepted while the original's answer was delayed survives the original's refusal, with the row and the reservation |
+| M10 | one broadcast per row | `src/db.js` | the guarded delete ignores the row's newer state | 1 | serialise: repro: a replacement accepted while the original's answer was delayed survives the original's refusal, with the row and the reservation |
+| M11 | one broadcast per row | `src/queue.js` | the poll loop acts on the row as it was listed, not as it is | 1 | serialise: a row the poll loop listed, then deleted by its first broadcast's refusal while the loop waited, is never acted on |
+| M12 | spend windows | `src/cap.js` | unresolved reservations count only by their own time | 84 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
+| M13 | spend windows | `src/db.js` | an unresolved reservation counts in the settled-by-time list too | 76 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
+| M14 | spend windows | `src/cap.js` | a bump increase is written back into the old reservation | 2 | cap-windows: each bump increase is its own entry, at the time it was checked; the reservation keeps its own time |
+| M15 | spend windows | `src/cap.js` | a bump increase is not checked against the cap | 4 | cap-windows: a bump increase is checked against the current windows, which hold the old unresolved reservation |
+| M16 | spend windows | `src/cap.js` | a settled send keeps the time it was reserved | 2 | cap-windows: a send settled after a boundary counts in the window it was settled in, not the one it was reserved in |
+| M17 | spend windows | `src/db.js` | release also gives back settled spend | 1 | cap-windows: a released reservation and its increases stop counting; a settled cost is never given back |
+| M18 | spend windows | `src/cap.js` | a released or settled reservation can be raised | 1 | cap-windows: only an unresolved reservation can be raised; a released or settled one cannot |
+| M19 | spend windows | `src/queue.js` | at boot, reservations of waiting sends are released as orphans | 7 | atomic-settle: releaseOrphans gives back only a reservation no send row holds, whatever the row's status |
+| M20 | spend windows | `src/cap.js` | dayResetsAt counts unresolved reservations | 1 | cap-windows: dayResetsAt comes from settled spend only, never from an old unresolved reservation |
+| M21 | release proof | `src/queue.js` | (i) the nonce count at the finalized block is not checked | 1 | release-proof: conflicting or missing reads leave the send unresolved |
+| M22 | release proof | `src/queue.js` | (ii) the consuming transaction may be one of the send's own hashes | 5 | dedupe control: the same own inclusion at 108 with no other consumer settles to the real cost |
+| M23 | release proof | `src/queue.js` | (ii) the search ignores the first broadcast block | 1 | release-proof: conflicting or missing reads leave the send unresolved |
+| M24 | release proof | `src/queue.js` | (ii) the transaction found need not be from the relayer | 1 | release-proof: conflicting or missing reads leave the send unresolved |
+| M25 | release proof | `src/queue.js` | (i) the proof reads the latest block, not the finalized one | 25 | atomic-settle: repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits |
+| M26 | release proof | `src/queue.js` | (iii) the proof reads the fallback client | 54 | atomic-settle: repro: 1,000 reserved at caps of 1,000, the settlement fails, boot: the real cost is charged and no second 1,000 fits |
+| M27 | release proof | `src/queue.js` | (v) replaced sends are no longer looked up | 10 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M28 | release proof | `src/db.js` | (v) a late receipt does not undo a release | 10 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M29 | release proof | `src/queue.js` | receipts "not found" release the send (the old rule) | 43 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M30 | release proof | `src/server.js` | (vi) GET /sends/:hash shows a replaced send as pending | 1 | release-proof: GET /sends/:hash answers pending, then not_sent with the consuming hash; any of the send's hashes finds it; unknown is 404 |
+| M31 | release proof | `src/queue.js` | reconcile leaves stuck sends out | 2 | release-proof: at boot, a stuck send the node lost is sent again as its last signed replacement, and keeps its reservation |
+| M32 | after broadcast | `src/sends/pipeline.js` | pipeline: a recordSend failure after the broadcast fails the send | 2 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
+| M33 | after broadcast | `src/sends/safeExec.js` | safe-exec: a recordSend failure after the broadcast is a 500 | 1 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
+| M34 | after broadcast | `src/sends/reality.js` | reality: a failure after the broadcast is 502 read_failed | 1 | after-broadcast: POST /send/reality/answer: storing the question fails after the broadcast: 202 with the hash, not 502 read_failed |
+| M35 | after broadcast | `src/sends/ens.js` | ens: a recordSend failure after the broadcast fails the job | 1 | ens: recording a send fails after its broadcast: the job goes on and keeps the hash |
+| M36 | reservation | `src/queue.js` | a fee bump is sent without extending the reservation | 6 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M37 | reservation | `src/queue.js` | the row is stored after the broadcast, not before | 165 | after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held |
+| M38 | reservation | `src/sends/pipeline.js` | the reservation is given back after a send that may be live | 9 | after-broadcast: pipeline: recording the send fails after the broadcast: still ok, with the hash |
+| M39 | not sponsored | `config/networks.json` | Base Sepolia is sponsored again (the config flag is gone) | 7 | status: a chain whose RPC is down reads unreachable, never a zero balance |
+| M40 | not sponsored | `src/config.js` | chainIsSponsored ignores "sponsoring": false | 14 | status: a chain whose RPC is down reads unreachable, never a zero balance |
+| M41 | not sponsored | `src/chain.js` | chain.js marks every configured chain sponsored | 1 | not-sponsored: config/networks.json turns sponsoring off for 84532 only; chain.js marks its clients |
+| M42 | not sponsored | `src/queue.js` | the queue signs and sends on a chain not sponsored | 1 | not-sponsored: the queue itself refuses a send on a chain that is not sponsored, before signing |
+| M43 | not sponsored | `src/sends/pipeline.js` | the pipeline reserves on a chain not sponsored | 1 | not-sponsored: the pipeline (Reality steps, reclaim, the watcher's challenge) refuses before the reservation |
+| M44 | not sponsored | `src/sends/safeExec.js` | safe-exec reserves on a chain not sponsored | 1 | not-sponsored: POST /send/safe-exec on 84532 is 503 chain_not_sponsored before any reservation, estimate or broadcast |
+| M45 | not sponsored | `src/sends/reality.js` | the Reality routes run on a chain not sponsored | 1 | not-sponsored: POST /send/reality/* on a chain that is not sponsored is 503 chain_not_sponsored, nothing read or sent |
+| M46 | not sponsored | `src/sends/ens.js` | ENS starts a job on a chain not sponsored | 1 | not-sponsored: POST /send/ens on a chain with ENS but sponsoring off is 503 chain_not_sponsored, no job |
+| M47 | nonce | `src/db.js` | nonce allocation forgets stuck sends | 1 | nonce-binding: repro: a stuck send the node forgot keeps nonce 5; the next send gets 6, not 5 |
+| M48 | nonce | `src/sends/pipeline.js` | pipeline.waitMined takes the newest row at the nonce | 2 | nonce-binding: repro: sends A and B both at nonce 5, B mined: waitMined(A) never returns B's receipt |
+| M49 | nonce | `src/sends/ens.js` | the ENS job's waiter takes the newest row at the nonce | 1 | ens: repro: another send at the same nonce mined; the job never takes its receipt for its own step |
+| M50 | nonce | `src/sends/pipeline.js` | a waiter does not follow its own send's fee bumps | 1 | nonce-binding: waitMined follows the send's own fee bumps (its row's hashes), whatever its nonce now holds |
+| M51 | atomic settle | `src/queue.js` | a settlement is not one transaction | 1 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M52 | atomic settle | `src/queue.js` | a release is not one transaction | 1 | atomic-settle: a crash between the steps of a release leaves the send unresolved with its reservation; the next pass releases it once |
+| M53 | atomic settle | `src/queue.js` | holding a replaced send again is not one transaction | 1 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M54 | atomic settle | `src/queue.js` | going back on a reorg is not one transaction | 1 | atomic-settle: a crash while a reorged send goes back to pending leaves it confirming with its maximum; the next pass moves it once |
+| M55 | atomic settle | `src/queue.js` | boot releases a reservation held by a mined or replaced row (only pending and stuck rows hold one) | 1 | finality: reconcile at boot keeps a confirming send, never rebroadcasts it, and settles it once final |
+| M56 | atomic settle | `src/queue.js` | boot does not recover a mined or replaced row with an open reservation | 3 | atomic-settle: at boot a mined row with an open reservation is settled from its receipt |
+| M57 | atomic settle | `src/queue.js` | onMined runs before the change is stored (a replaced send held again) | 2 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M58 | finality | `src/queue.js` | a receipt settles at once (the old rule) | 28 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M59 | finality | `src/queue.js` | a confirming send settles before its block is finalized | 21 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M60 | finality | `src/queue.js` | a receipt that is gone is not a reorg | 7 | atomic-settle: a crash while a reorged send goes back to pending leaves it confirming with its maximum; the next pass moves it once |
+| M61 | finality | `src/queue.js` | a receipt that names another block is not a reorg | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
+| M62 | finality | `src/queue.js` | another block at the receipt's height is not a reorg | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
+| M63 | finality | `src/queue.js` | a receipt block off the finalized chain settles anyway | 1 | finality: the receipt is read again on the proof endpoint; a reorg in any form puts the send back to pending with its maximum |
+| M64 | finality | `src/queue.js` | the poll loop leaves confirming sends out | 14 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M65 | finality | `src/queue.js` | reconcile rebroadcasts a confirming send | 2 | finality: reconcile at boot keeps a confirming send, never rebroadcasts it, and settles it once final |
+| M66 | finality | `src/db.js` | nonce allocation forgets confirming sends | 1 | finality: a confirming send keeps its nonce: the next send never takes it |
+| M67 | finality | `src/queue.js` | a replaced send whose receipt appears is not held again | 9 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M68 | finality | `src/queue.js` | the bump timer does not restart after a reorg | 2 | finality: a send back to pending after a reorg is not bumped at once: its bump timer starts again at the head |
+| M69 | finality | `src/queue.js` | the read client's receipt is trusted without the proof endpoint | 2 | finality: a receipt only the read client has (the proof endpoint has none yet) changes nothing, and the send is not bumped |
+| M70 | finality | `src/server.js` | GET /sends/:hash says finalized for a confirming send | 1 | finality: GET /sends/:hash says mined with finalized false while it waits, then finalized true |
+| M71 | finality | `src/server.js` | GET /sends/:hash shows a confirming send as pending | 1 | finality: GET /sends/:hash says mined with finalized false while it waits, then finalized true |
+| M72 | finalized chain | `src/queue.js` | the consuming block need not be on the finalized chain | 7 | proof-binding: repro: finalized block 105 is hash A holding our own transaction; block 105 read by number is hash B holding another at nonce 5: nothing is released |
+| M73 | finalized chain | `src/queue.js` | the consuming transaction need not name its block | 1 | proof-binding: the consuming transaction must report the consuming block as its own |
+| M74 | finalized chain | `src/queue.js` | our own receipt need not name the consuming block | 1 | proof-binding: our own transaction in the consuming block settles only from a receipt that names that block |
+| M75 | finalized chain | `src/queue.js` | the finalized hash is not pinned (the walk starts from the block it checks) | 45 | atomic-settle: a crash between any two steps of a settlement leaves nothing half done; the next pass settles it once |
+| M76 | finalized chain | `src/queue.js` | a block read by hash need not be the block asked for | 1 | proof-binding: a block read by hash must be the block asked for, at the height expected |
+| M77 | finalized chain | `src/queue.js` | a block read by hash need not be at the height expected | 2 | proof-binding: a block read by hash must be the block asked for, at the height expected |
+| M78 | finalized chain | `src/queue.js` | the walk has no budget per pass | 1 | proof-binding: a walk longer than one pass's budget goes on in the next pass from where it stopped |
+| M79 | finalized chain | `src/queue.js` | blocks read by hash are not kept between passes | 3 | dedupe walk: a confirming send settles through a walk longer than the kept-blocks limit, over several passes |
+| M80 | proof binding | `src/queue.js` | findReceipt takes a receipt of another transaction and follows its hash | 1 | binding: a receipt of another transaction is no answer: the proof still releases a send another transaction replaced |
+| M81 | proof binding | `src/queue.js` | the binding accepts a hash that is not one of the send's own | 1 | binding: a confirming row whose stored hash is not one of its own (a damaged database) never settles |
+| M82 | proof binding | `src/queue.js` | the block need not list the transaction (exactly once) | 4 | binding: repro: our own transaction is in finalized block 103, its receipt names canonical block 104 for 1 wei: nothing settles, and no second 999 fits |
+| M83 | proof binding | `src/queue.js` | the listed transaction need not name the block's hash | 1 | binding: the transaction listed in the block must name that block, by hash and by height |
+| M84 | proof binding | `src/queue.js` | the listed transaction need not name the block's height | 1 | binding: the transaction listed in the block must name that block, by hash and by height |
+| M85 | proof binding | `src/queue.js` | seen() marks confirming without the binding | 6 | dedupe (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again |
+| M86 | proof binding | `src/queue.js` | confirm() settles a send whose block and receipt disagree about the transaction | 2 | binding: a confirming send whose block no longer lists its transaction (the same block hash) does not settle at finality |
+| M87 | not sponsored | `src/queue.js` | reconcile rebroadcasts a stored send on a chain not sponsored | 1 | not sponsored: repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it |
+| M88 | not sponsored | `src/queue.js` | the poll loop bumps a stored send on a chain not sponsored | 1 | not sponsored: repro: a stored send, then the chain is not sponsored: no rebroadcast at boot, no fee bump, the reservation stays 1,000; its receipt still settles it |
+| M89 | block cache | `src/queue.js` | a block read by hash at the wrong height is kept | 1 | block cache: repro: one wrong-height answer to a read by hash, then correct ones: the proof completes |
+| M90 | reorg at boot | `src/queue.js` | reconcile gives resolve no head (a reorg found at boot keeps the old bump timer) | 1 | boot: a confirming send found reorged at boot waits a full bump interval from the boot head |
+| M91 | boot recovery | `src/queue.js` | boot recovery keeps the recovered row's block hash | 1 | boot: boot recovery clears the recovered row's block hash |
+| M92 | re-hold | `src/queue.js` | a replaced send whose own receipt appears is not held again before the binding read (the re-hold removed) | 9 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M93 | re-hold | `src/queue.js` | onMined runs before markConfirming stores confirming | 1 | dedupe: markConfirming stores confirming before onMined runs |
+| M94 | re-hold | `src/queue.js` | the re-hold keeps the old sentBlock (the bump timer does not restart) | 1 | re-hold: a replaced send with a bound late receipt is held again, then confirming, and at finality stays held against the finalized OTHER |
+| M95 | re-hold | `src/queue.js` | the re-hold keeps the consuming hash | 2 | re-hold: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled |
+| M96 | re-hold | `src/queue.js` | the re-hold keeps the consuming block | 2 | re-hold: a replaced send whose late own-hash receipt is not bound to its block is held again at 1,000 and never settled |
+| M97 | re-hold | `src/queue.js` | the re-hold keeps the block hash | 1 | dedupe (M97): a replaced row that still carries a block hash (an older database) has it cleared when held again |
+| M98 | re-hold | `src/queue.js` | the re-hold writes no send_release_reversed event | 6 | atomic-settle: a crash while a replaced send whose own receipt appeared is held again leaves it as it was; the next pass holds it once |
+| M99 | finality | `src/queue.js` | confirm() settles an own inclusion that contradicts the finalized consumer | 7 | dedupe: OTHER takes nonce 5 at 103, the own hash shows at 108; at finality the send does not settle and 1,000 stays held |
 | M100 | dedupe | `src/queue.js` | a send held on conflicting evidence is logged on every pass, not once | 1 | dedupe ops: a send held on conflicting evidence logs one line however many passes see it, and is listed with a plain reason |
 | M101 | dedupe | `src/queue.js` | a reorg leaves the held reason on a send that goes back to pending | 1 | dedupe ops: a held send that goes back to pending on a reorg no longer carries its held reason |
 | M102 | dedupe | `src/queue.js` | needsOperator leaves out stuck sends | 2 | ops routes: GET /ops/recheck lists, POST /ops/recheck takes only a hash and answers what the chain says |
@@ -161,20 +124,134 @@ Baseline: 330 tests pass, 0 fail. Mutations: 123, caught: 123, survived: 0.
 | M104 | dedupe | `src/server.js` | the recheck body may carry keys besides hash | 1 | ops routes: GET /ops/recheck lists, POST /ops/recheck takes only a hash and answers what the chain says |
 | M105 | dedupe | `src/queue.js` | the nonce takes only the proof endpoint's pending count | 2 | cap: integer math only, no floating point in cap.js or queue.js |
 | M106 | dedupe | `src/queue.js` | the nonce takes only the fallback's pending count | 2 | cap: integer math only, no floating point in cap.js or queue.js |
-| M107 | dedupe | `src/watcher.js` | the challenge's in-flight mark is written after the question is stored | 1 | watcher: the in-flight mark is written before the challenge's bond is stored (25-28 dedupe, round-2 Q6) |
+| M107 | dedupe | `src/watcher.js` | the challenge's in-flight mark is written after the question is stored | 1 | watcher: the in-flight mark is written before the challenge's bond is stored |
 | M108 | dedupe | `src/queue.js` | the walk cache prune deletes blocks above the floor | 2 | dedupe walk: a confirming send settles through a walk longer than the kept-blocks limit, over several passes |
 | M109 | dedupe | `src/queue.js` | the walk cache floor ignores confirming sends | 1 | dedupe walk: a confirming send settles through a walk longer than the kept-blocks limit, over several passes |
-| M110 | dedupe | `src/sends/pipeline.js` | pipeline: the fee estimate 502 loses broadcast false | 1 | broadcast-flag: pipeline, the fee estimate fails: 502 with broadcast false |
-| M111 | dedupe | `src/sends/pipeline.js` | pipeline: the enqueue 502 loses broadcast false | 1 | broadcast-flag: pipeline, the node refuses the send: 502 with broadcast false, nothing held |
+| M110 | dedupe | `src/sends/pipeline.js` | pipeline: the fee estimate 502 loses broadcast false | 3 | broadcast-flag: pipeline, the fee estimate fails: 502 with broadcast false |
+| M111 | dedupe | `src/sends/pipeline.js` | pipeline: the enqueue 502 loses broadcast false | 3 | broadcast-flag: pipeline, the node refuses the send: 502 with broadcast false, nothing held |
 | M112 | dedupe | `src/sends/safeExec.js` | safe-exec: the unreadable Safe nonce 502 loses broadcast false | 1 | duplicate: the Safe nonce cannot be read: 502 safe_nonce_unreadable with broadcast false, nothing reserved or sent |
-| M113 | dedupe | `src/sends/safeExec.js` | safe-exec: the fee estimate 502 loses broadcast false | 1 | broadcast-flag: safe-exec, the fee estimate fails: 502 with broadcast false, nothing sent or held |
-| M114 | dedupe | `src/sends/safeExec.js` | safe-exec: the enqueue 502 loses broadcast false | 1 | broadcast-flag: safe-exec, the node refuses the send: 502 with broadcast false, nothing held |
+| M113 | dedupe | `src/sends/safeExec.js` | safe-exec: the fee estimate 502 loses broadcast false | 7 | broadcast-flag: safe-exec, the fee estimate fails: 502 with broadcast false, nothing sent or held |
+| M114 | dedupe | `src/sends/safeExec.js` | safe-exec: the enqueue 502 loses broadcast false | 2 | broadcast-flag: safe-exec, the node refuses the send: 502 with broadcast false, nothing held |
 | M115 | dedupe | `src/sends/reality.js` | reality: a hub error 502 loses broadcast false | 1 | broadcast-flag: reality, the hub cannot be read: 502 with broadcast false |
 | M116 | dedupe | `src/sends/reality.js` | reality: the read_failed 502 loses broadcast false | 1 | after-broadcast: POST /send/reality/answer: a read that fails before any broadcast is still 502 read_failed, and nothing is sent |
 | M117 | dedupe | `src/sends/ens.js` | ens: the availability_unreadable 502 loses broadcast false | 1 | broadcast-flag: ens, the name availability cannot be read: 502 with broadcast false, nothing sent |
-| M118 | dedupe | `src/db.js` | the duplicate check ignores status, so a replaced send counts as a duplicate | 1 | duplicate: a replaced row with the key never happened: a new send goes out and carries the key |
+| M118 | dedupe | `src/db.js` | the duplicate check ignores status, so a replaced send counts as a duplicate | 2 | duplicate: a replaced row with the key never happened: a new send goes out and carries the key |
 | M119 | dedupe | `src/queue.js` | the duplicate check is removed from the queue | 9 | duplicate: two requests with the same Safe nonce: the second is 202 duplicate with the first hash, one transaction, one reservation |
 | M120 | dedupe | `src/sends/pipeline.js` | pipeline: a duplicate does not give its reservation back | 5 | duplicate: two concurrent pipeline sends with one dedupeKey: exactly one broadcast, one reservation held |
 | M121 | dedupe | `src/sends/safeExec.js` | safe-exec: a duplicate does not give its reservation back | 1 | duplicate: two requests with the same Safe nonce: the second is 202 duplicate with the first hash, one transaction, one reservation |
-| M122 | dedupe | `src/sends/safeExec.js` | safe-exec: the dedupe key ignores the Safe nonce | 1 | duplicate: a different Safe nonce is a new send |
+| M122 | dedupe | `src/sends/safeExec.js` | safe-exec: the dedupe key ignores the Safe nonce | 2 | duplicate: a different Safe nonce is a new send |
 | M123 | dedupe | `src/sends/reality.js` | reality: a duplicate answer stores the question again | 1 | duplicate: a duplicate answer does not store the question again |
+| M124 | fund creation | `src/sends/safeCreate.js` | safe-create: the policy switch is ignored | 2 | safe-create C11: creation off is refused before any estimate or claim |
+| M125 | fund creation | `src/sends/safeCreate.js` | safe-create: the site is not checked | 5 | safe-create C11: a wrong site is refused before any estimate or claim |
+| M126 | fund creation | `src/sends/safeCreate.js` | safe-create: an unenrolled Group is accepted when a group list is set | 3 | safe-create C11: an unenrolled Group is refused before any estimate or claim |
+| M127 | fund creation | `src/sends/safeCreate.js` | safe-create: any chain entry with the addresses qualifies (fundCreation ignored) | 2 | safe-create C16: a chain not marked fundCreation is network_not_supported (403), sponsored or not, before any estimate |
+| M128 | fund creation | `src/sends/safeCreate.js` | safe-create: any Safe version is accepted | 1 | safe-create C16: Base Sepolia, an unknown chain, mainnet and another Safe version are network_not_supported |
+| M129 | fund creation | `src/sends/safeCreate.js` | safe-create: a chain with sponsoring off still sends | 1 | safe-create C16: a fund-creation chain with sponsoring off is 503 chain_not_sponsored, before any claim |
+| M130 | fund creation | `src/sends/safeCreate.js` | safe-create: the predicted address is not checked | 3 | safe-create code: the prediction uses the hash the reader gives, so another code is prediction_mismatch |
+| M131 | fund creation | `src/sends/safeCreate.js` | safe-create: the payer may be an owner | 1 | safe-create: the payer is never an owner (400 payer_is_owner, before any claim) |
+| M132 | fund creation | `src/sends/safeCreate.js` | safe-create: a different intent takes over a slot | 1 | safe-create D-16 race: two different intents that both passed the early read give one send and one 409 slot_taken |
+| M133 | fund creation | `src/sends/safeCreate.js` | safe-create: a repeat is not answered from the slot | 1 | safe-create D-16 race: two identical requests that both passed the early read give one send and one duplicate |
+| M134 | fund creation | `src/sends/safeCreate.js` | safe-create: the envelope is not checked | 1 | safe-create C18: an expired first delivery is 400 expired, nothing claimed; an accepted repeat is answered after expiry |
+| M135 | fund creation | `src/sends/safeCreate.js` | safe-create: the quotas are not checked | 5 | safe-create C12: one attempt per actor per day (setup_limit actor, until in seconds) |
+| M136 | fund creation | `src/sends/safeCreate.js` | safe-create: no attempt is counted at the claim | 20 | safe-create C13: an exact repeat (another actor, a new envelope) gets the slot answer with no second estimate, reservation or send |
+| M137 | fund creation | `src/sends/safeCreate.js` | safe-create: an exit before the queue keeps the attempt | 27 | safe-create C12: the money cap refuses with cap_reached in seconds; slot not_sent and the attempt given back |
+| M138 | fund creation | `src/sends/safeCreate.js` | safe-create: an exit before the queue leaves the slot sending | 23 | created-fund D-24: a slot left not_sent never counts |
+| M139 | fund creation | `src/sends/safeCreate.js` | safe-create: a queue refusal keeps the reservation | 4 | safe-create: an empty payer (insufficient funds) after the claim gives the slot and the attempt back |
+| M140 | fund creation | `src/sends/safeCreate.js` | safe-create: a lost answer after the node took the send gives the slot back | 1 | safe-create: a queue that rejects after storing its row keeps the slot pending, the attempt and the reservation |
+| M141 | fund creation | `src/sends/safeCreate.js` | safe-create: the money cap is not asked | 2 | safe-create C12: the money cap refuses with cap_reached in seconds; slot not_sent and the attempt given back |
+| M142 | fund creation | `src/sends/safeCreate.js` | safe-create: the cap times are milliseconds | 1 | safe-create C12: the money cap refuses with cap_reached in seconds; slot not_sent and the attempt given back |
+| M143 | fund creation | `src/sends/safeCreate.js` | safe-create: the intent digest leaves out the threshold | 1 | creation call: the intent digest ignores the actor and the envelope, and nothing else |
+| M144 | fund creation | `src/sends/safeCreate.js` | safe-create: extra body keys are accepted | 1 | safe-create C17: extra fields (calldata, value, a target, a refund) are unexpected_field, also inside actor |
+| M145 | fund creation | `src/sends/safeCreate.js` | safe-create: extra actor keys are accepted | 1 | safe-create C17: extra fields (calldata, value, a target, a refund) are unexpected_field, also inside actor |
+| M146 | fund creation | `src/sends/safeCreate.js` | safe-create: duplicate owners are accepted | 1 | safe-create C17: body rules (owners, threshold, salt, UUIDs, envelope fields) are 400 with the rule |
+| M147 | fund creation | `src/sends/safeCreate.js` | safe-create: the initializer sets no fallback handler | 74 | created-fund D-24: a created fund is refused while its creation is pending and sent once the creation receipt succeeded |
+| M148 | fund creation | `src/creations.js` | slot view: a replaced own row still reads pending | 2 | a queue row at or below the slot floor belongs to an earlier claim, not this one |
+| M149 | fund creation | `src/creations.js` | slot view: a reverted receipt reads confirmed | 3 | created-fund D-24: a slot whose receipt reverted never counts |
+| M150 | fund creation | `src/creations.js` | slot view: rows below the floor count as the slot's own | 2 | a queue row at or below the slot floor belongs to an earlier claim, not this one |
+| M151 | fund creation | `src/creations.js` | quota: only the site limit is checked | 3 | creation-policy: quotas are rolling, actor first, given-back attempts do not count |
+| M152 | fund creation | `src/creations.js` | quota: until counts from the newest attempt | 3 | creation-policy: quotas are rolling, actor first, given-back attempts do not count |
+| M154 | fund creation | `src/creations.js` | policy: an invalid file is used anyway | 2 | creation-policy: a missing, unreadable or invalid file turns creation off with one log line |
+| M155 | fund creation | `src/creations.js` | recovery: a slot with its own row is given back | 1 | safe-create C22: after a restart over the same file, a slot left sending is settled from the queue |
+| M156 | fund creation | `src/creations.js` | recovery: an unsent slot keeps its attempt | 1 | safe-create C22: after a restart over the same file, a slot left sending is settled from the queue |
+| M157 | fund creation | `src/db.js` | db: the receipt outcome survives a reorg back to pending | 1 | safe-create C13: a repeat after the receipt reads confirmed; a reverted receipt reads failed and is never sent again |
+| M158 | fund creation | `src/db.js` | db: given-back attempts still count | 29 | creation-policy: quotas are rolling, actor first, given-back attempts do not count |
+| M159 | fund creation | `src/queue.js` | queue: a confirming receipt does not store its outcome | 1 | finality: a send marked confirming stores its receipt outcome (success or reverted) from the first receipt |
+| M160 | fund creation | `src/allowlist.js` | creation allow-list: any selector on the factory | 1 | creation call: the selectors are the signatures, and only createProxyWithNonce on the chain factory is allowed |
+| M161 | fund creation | `src/allowlist.js` | creation allow-list: a chain with sponsoring off qualifies | 1 | creation call: the selectors are the signatures, and only createProxyWithNonce on the chain factory is allowed |
+| M162 | fund creation | `src/server.js` | server: a missing creation loses its reason | 5 | safe-create: GET for a Group with no slot is the contract 404 |
+| M163 | fund creation | `src/sends/safeCreate.js` | safe-create: after queueing, a broadcast refused for lack of funds is answered payer_empty (the service's rule) | 4 | safe-create: an empty payer (insufficient funds) after the claim gives the slot and the attempt back |
+| M164 | fund creation | `src/sends/safeCreate.js` | creation code: the factory's code is not checked against the hash | 1 | safe-create code: other code is a mismatch, a failed read is unreadable, and neither is kept |
+| M165 | fund creation | `src/sends/safeCreate.js` | creation code: the factory is read on every request | 1 | safe-create code: the reader asks the factory's proxyCreationCode() once per chain and keeps the good answer |
+| M166 | fund creation | `src/sends/safeCreate.js` | safe-create: a factory with other code is not refused as network_not_supported | 1 | safe-create code: a factory without Safe 1.4.1's code is network_not_supported (403), nothing claimed, estimated or sent |
+| M167 | fund creation | `src/sends/safeCreate.js` | safe-create: an unreadable factory goes on to the prediction | 1 | safe-create code: an unreadable factory is chain_not_available (503), nothing claimed, estimated or sent |
+| M198 | fund creation | `src/sends/safeExec.js` | safe-exec: created funds are ignored | 8 | created-fund D-24: a created fund is refused while its creation is pending and sent once the creation receipt succeeded |
+| M199 | fund creation | `src/creations.js` | created funds: a fund counts before its creation is confirmed, or after it failed | 7 | created-fund D-24: a created fund is refused while its creation is pending and sent once the creation receipt succeeded |
+| M200 | fund creation | `src/creations.js` | created funds: another site's fund counts | 2 | created-fund D-24: another site, or no site, does not count a slot confirmed for the first |
+| M201 | fund creation | `src/sends/safeExec.js` | safe-exec: a created fund counts on any chain | 1 | created-fund D-24: it counts on its own chain and at its own address only |
+| M202 | fund creation | `src/sends/safeExec.js` | safe-exec: any Safe counts once the site has one confirmed fund | 1 | created-fund D-24: it counts on its own chain and at its own address only |
+| M203 | fund creation | `src/sends/safeExec.js` | safe-exec: a created fund passes registration but is left out of the allow-list | 8 | created-fund D-24: a created fund is refused while its creation is pending and sent once the creation receipt succeeded |
+| M204 | fund creation | `src/sends/safeCreate.js` | safe-create: a not_sent retry rebuilds the call from the current entry (the stored-call branch never taken) | 2 | safe-create D-16 retry: a not_sent resend after the fallback handler and the code hash changed sends the stored call to the stored address, never predicting again |
+| M205 | fund creation | `src/sends/safeCreate.js` | safe-create: the claim stores no call, so every retry reads the factory again | 3 | safe-create D-03 store: the claim stores the exact call it validated, once, and a retry never rewrites it |
+| M206 | fund creation | `src/sends/safeCreate.js` | safe-create: a retry sends to the current entry's factory instead of the stored callTarget | 1 | safe-create D-16 retry: a not_sent resend after the factory address itself changed still sends to the stored factory |
+| M168 | fund creation | `src/db.js` | db: a creation slot is read without its network | 5 | db-migration: a 601e78e file opens with the per-network key, keeps its slot and attempts, and backfills the network |
+| M169 | fund creation | `src/db.js` | db: the site quota counts the attempts of every network | 3 | creation-policy D-02: three counted attempts on one network stop the site there and not on another network |
+| M170 | fund creation | `src/db.js` | db: the actor quota counts the attempts of every network | 3 | creation-policy D-02: three counted attempts on one network stop the actor there and not on another network |
+| M171 | fund creation | `src/sends/safeCreate.js` | safe-create: an attempt is stored without its network's id | 20 | safe-create C13: an exact repeat (another actor, a new envelope) gets the slot answer with no second estimate, reservation or send |
+| M172 | fund creation | `src/server.js` | server: GET /creations ignores the chainId query | 5 | safe-create D-02: GET /creations/:groupUuid?chainId= answers that network's slot |
+| M173 | fund creation | `src/server.js` | server: two networks marked for fund creation and no chainId answer 404 instead of 400 chain_id_required | 2 | safe-create D-02: without chainId one marked network answers, two marked networks are 400 chain_id_required |
+| M174 | fund creation | `src/server.js` | server: a malformed chainId is not refused | 3 | safe-create D-02: a malformed chainId is 400 invalid_chain_id; a valid one with no slot is the contract 404 |
+| M175 | fund creation | `src/db.js` | db: the old-schema creations rebuild is skipped | 3 | db-migration: a 601e78e file opens with the per-network key, keeps its slot and attempts, and backfills the network |
+| M176 | fund creation | `src/db.js` | db: the attempts chain backfill gives every migrated attempt a NULL network (one text cannot drop the whole statement) | 1 | db-migration: a 601e78e file opens with the per-network key, keeps its slot and attempts, and backfills the network |
+| M177 | fund creation | `src/sends/safeCreate.js` | safe-create: a network not flagged testnet passes the early gate (reaches the sponsoring check and the factory read, and sends on a retry) | 2 | safe-create D-07: a fund-creation network not flagged testnet is refused 403 network_not_supported (sponsoring true), before any read, estimate or claim |
+| M178 | fund creation | `src/allowlist.js` | creation allow-list: a network not flagged testnet qualifies | 1 | safe-create D-07: the creation allow-list leaves out a network not flagged testnet |
+| M179 | fund creation | `src/sends/safeCreate.js` | safe-create: the fee account's balance is not checked before the reservation | 7 | safe-create D-15: a fee wallet with a zero balance is payer_empty with nothing counted, queued or reserved, and the same intent sends once funded |
+| M180 | fund creation | `src/sends/safeCreate.js` | safe-create: the balance check compares with zero instead of the send's cost | 1 | safe-create D-15: a balance one wei below the send's cost is payer_empty, exactly the cost goes on to the queue |
+| M181 | fund creation | `src/sends/safeCreate.js` | safe-create: an unreadable balance refuses the send | 3 | safe-create D-15: a balance that cannot be read does not refuse the send |
+| M182 | fund creation | `src/sends/safeCreate.js` | safe-create: the balance refusal keeps the slot and the attempt (its give-back skipped) | 7 | safe-create D-15: a fee wallet with a zero balance is payer_empty with nothing counted, queued or reserved, and the same intent sends once funded |
+| M183 | fund creation | `src/sends/safeCreate.js` | safe-create: an insufficient-funds estimate answers simulation_failed | 2 | safe-create D-15: an estimate that fails for insufficient funds is payer_empty, a revert is still simulation_failed |
+| M184 | fund creation | `src/queue.js` | broadcast: a -32003 insufficient-funds answer stays uncertain | 17 | broadcast-flag: safe-exec, the node refuses the send: 502 with broadcast false, nothing held |
+| M185 | fund creation | `src/queue.js` | broadcast: any -32003 answer counts as a refusal | 1 | broadcast D-15: any other -32003 answer stays uncertain, and the existing classes do not move |
+| M186 | fund creation | `src/sends/safeCreate.js` | safe-create: a claimed slot's repeat is answered only after the prediction (the early stored read removed) | 1 | safe-create D-16: a repeat of a claimed intent is answered from the slot after fund creation was switched off for the network |
+| M187 | fund creation | `src/sends/safeCreate.js` | safe-create: a different intent for a claimed slot reads the factory before the 409 (the early 409 removed) | 5 | safe-create C15: a different intent for a taken slot is 409 slot_taken, whatever its state |
+| M208 | fund creation | `src/server.js` | status: the site's confirmed created funds are left out of GET /status | 6 | safe-create D-26: on a self-binding relayer GET /status lists the bound site's confirmed fund in createdFunds and not in groups |
+| M209 | fund creation | `src/server.js` | status: created funds are listed inside groups too | 5 | created-fund D-24: naming is unchanged: /send/ens still refuses it and GET /status lists no group for it |
+| M210 | fund creation | `src/sends/safeCreate.js` | safe-create: an estimate failure with an empty fee wallet answers simulation_failed (the zero-balance check in the estimate catch never refuses) | 1 | safe-create D-15: geth's 'gas required exceeds allowance (0)' on an empty fee wallet is payer_empty, nothing counted, reserved or queued |
+| M211 | fund creation | `src/creations.js` | created funds: a confirmed slot whose stored status stayed sending is left out | 1 | status-created-funds D-26: a confirmed creation whose slot stayed sending is listed once and safe-exec accepts it |
+| M188 | fund creation | `src/db.js` | site binding: a second claim replaces the stored site | 5 | safe-create TM-281: after the bound site filled its quota and another site was refused, the next request is still 429 setup_limit site |
+| M189 | fund creation | `src/creations.js` | bound site: a stored binding is preferred over the operator's site | 2 | site-binding: a database bound to one site, opened with an operator policy naming another, answers the operator site and says so once without a UUID |
+| M190 | fund creation | `src/server.js` | POST /site: the site binds while creation is off | 2 | site-binding: while creation is off POST /site is 403 creation_disabled and stores nothing |
+| M191 | fund creation | `src/server.js` | POST /site: a site other than the operator's is accepted | 2 | site-binding: an operator site is the binding: the same site is 200 created false with no row written, another is 409, GET answers it |
+| M192 | fund creation | `src/server.js` | POST /site: a repeat enrolment answers created | 3 | safe-create TM-281: after the bound site filled its quota and another site was refused, the next request is still 429 setup_limit site |
+| M193 | fund creation | `src/sends/safeCreate.js` | safe-create: the site is checked against the policy file only (a self-bound site is refused) | 6 | safe-create D-05: once POST /site binds the site, its request with a listed Group is accepted and another site is refused |
+| M194 | fund creation | `src/server.js` | POST /site: an upper-case UUID or a body with extra keys is accepted | 2 | site-binding: a body that is not exactly {"siteUuid": "<lower-case uuid>"} is 400 invalid_body (413 when oversized) and stores nothing |
+| M195 | fund creation | `src/server.js` | GET /creations: the slot is read under the policy file's site only (a self-bound site finds nothing) | 2 | safe-create D-05: once POST /site binds the site, its request with a listed Group is accepted and another site is refused |
+| M196 | fund creation | `src/sends/safeCreate.js` | safe-create: an empty groups list refuses every group (the list is read as an allow-list even when empty) | 2 | safe-create D-06: with the shipped policy, once POST /site binds the site, a group that appears in no list is accepted |
+| M197 | fund creation | `config/fund-creation.json` | shipped policy: creation is off in what the image ships | 4 | creation-policy D-07: the shipped file is valid, on, and leaves the site and the groups to the site |
+| M207 | fund creation | `src/sends/safeExec.js` | safe-exec: the created-fund rule reads the policy file's site only (a self-bound site's funds never count) | 1 | safe-create D-24: on a self-binding relayer a fund created for the bound site and confirmed makes a sponsored send; before the site is bound, nothing counts |
+| M223 | fund creation | `src/sends/safeCreate.js` | safe-create: a fee account holding dust whose estimate fails is held as simulation_failed (the dust check never runs) | 5 | safe-create D-15: dust below the cost and geth's allowance estimate error is payer_empty, nothing counted, reserved or queued, and the same intent sends once funded |
+| M224 | fund creation | `src/sends/safeCreate.js` | safe-create: an account holding exactly the send's cost whose estimate fails is told to wait instead of simulation_failed | 1 | safe-create D-15: a revert by an account that can pay the cost is still simulation_failed (exactly the cost, and well funded) |
+| M226 | fund creation | `src/server.js` | GET /creations: a chainId above the largest safe integer is read with lost precision (404 instead of 400) | 1 | safe-create D-02: a chainId above the largest safe integer is 400 invalid_chain_id, not a precision-lost 404 |
+| M227 | fund creation | `src/sends/safeCreate.js` | safe-create: a dust account whose second estimate times out or fails for any reason but a revert is held as simulation_failed | 2 | safe-create D-15: dust and a second estimate that cannot be read (timeout, outage) is a retryable 502, never a held 409 |
+| M228 | fund creation | `src/sends/safeCreate.js` | safe-create: a transport failure wrapped inside a revert-worded estimate error is read as a revert (the cause chain's words are not checked) | 1 | safe-create D-15: dust and a transport failure wrapped inside a revert-worded estimate error is a retryable 502, a revert alone is still held |
+| M240 | fund creation | `src/server.js` | GET /status: every network is marked covered, whether or not the fee service pays on it | 9 | status: a chain whose RPC is down reads unreachable, never a zero balance |
+| M241 | fund creation | `src/sends/safeExec.js` | safe-exec: the balance read before the reservation never refuses (a balance below the cost is reserved and sent) | 3 | safe-exec D-35: a good estimate and a balance one wei below the cost answers payer_empty, three keys, nothing reserved |
+| M242 | fund creation | `src/feeAccount.js` | fee account: the cost has no 12/10 margin | 10 | reality-execute D-39: a balance one wei below the cost answers payer_empty, three keys, nothing queued or reserved; the cost itself sends |
+| M243 | fund creation | `src/sends/safeExec.js` | safe-exec: a balance of exactly the cost is refused | 1 | safe-exec D-35: the cost line: a balance of exactly the cost sends, the cost without the margin does not |
+| M244 | fund creation | `src/sends/safeExec.js` | safe-exec: an unreadable balance after a good estimate reads as empty | 1 | safe-exec D-35: an unreadable balance after a good estimate goes on as today and sends |
+| M245 | fund creation | `src/feeAccount.js` | fee account: the transport check is skipped on the first estimate (a second estimate is made) | 1 | safe-exec D-35: a first estimate that fails in transport is a retryable 502 with no second estimate |
+| M246 | fund creation | `src/feeAccount.js` | fee account: any failure of the second estimate is a revert | 2 | safe-exec D-35: a socket failure inside a revert-typed second estimate is a retryable 502 |
+| M247 | fund creation | `src/feeAccount.js` | fee account: the transport check reads only the outer error, not its cause chain | 2 | safe-exec D-35: a first estimate that fails in transport is a retryable 502 with no second estimate |
+| M248 | fund creation | `src/sends/safeExec.js` | safe-exec: the duplicate look before payer_empty always finds no row | 2 | safe-exec D-35: a request already in the queue gets the duplicate answer, never payer_empty |
+| M249 | fund creation | `src/sends/safeExec.js` | safe-exec: after queueing, a broadcast refused for lack of funds is answered payer_empty (the service's rule) | 1 | safe-exec D-35: a broadcast the node refuses for lack of funds is a retryable could-not-check, never payer_empty, and gives the reservation back |
+| M250 | fund creation | `src/queue.js` | broadcast: every -32000 refusal is a funds refusal | 2 | broadcast: only the node's own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain |
+| M251 | fund creation | `src/sends/safeExec.js` | safe-exec: the simulation before payer_empty is skipped (a balance below the cost answers payer_empty at once) | 2 | safe-exec D-35: a good estimate and a balance one wei below the cost answers payer_empty, three keys, nothing reserved |
+| M252 | fund creation | `src/feeAccount.js` | fee account: a funded balance after an unrecognised first failure answers 409 | 1 | safe-exec D-35: an empty or dust account whose own estimate fails is decided by the estimate without an account |
+| M253 | fund creation | `src/sends/safeExec.js` | safe-exec: the simulation after the reservation answers 409 for every failure | 1 | safe-exec D-35: the simulation after the reservation: could not check is 502 simulation_unavailable, a revert stays 409 |
+| M254 | fund creation | `src/sends/reality.js` | reality execute: the execute does not pass feeVerdict | 5 | reality-execute D-39: a balance one wei below the cost answers payer_empty, three keys, nothing queued or reserved; the cost itself sends |
+| M255 | fund creation | `src/sends/pipeline.js` | pipeline: feeVerdict defaults to true, so every caller gets the verdict | 1 | reality-execute D-39: every other pipeline caller answers as before (add, the bond claim, a refusal on add) |
+| M256 | fund creation | `src/sends/pipeline.js` | pipeline: the execute's simulation before payer_empty is skipped | 1 | reality-execute D-39: an execute whose simulation fails is never told payer_empty |
+| M257 | fund creation | `src/sends/safeCreate.js` | safe-create: a first estimate that fails in transport, or with no revert, is held as simulation_failed (the first estimate is not classified) | 1 | safe-create D-15: a first estimate that fails in transport is a retryable 502, never a held 409, whether or not the balance can be read |
+| M258 | fund creation | `src/creations.js` | bound site: a policy file that cannot be read falls back to the stored binding | 1 | site-binding: a policy file that cannot be read or is invalid binds the relayer to no site, even over a stored binding the operator had overridden |
+| M259 | fund creation | `src/sends/safeCreate.js` | safe-create: a typed revert whose text holds a transport word is read as a transport failure (the typed revert does not outrank words) | 1 | safe-create D-15: a typed revert whose message names a timeout in the RPC URL is still the held 409, even with the balance unreadable |
+| M260 | fund creation | `src/sends/pipeline.js` | pipeline: after queueing, a broadcast refused for lack of funds is answered payer_empty (the service's rule) | 1 | reality-execute D-39: after queueing, a broadcast refused for lack of funds is a retryable could-not-check, never payer_empty |
+| M261 | fund creation | `src/sends/pipeline.js` | pipeline: after a broadcast refused for lack of funds, the duplicate is not re-read | 1 | reality-execute D-39: a row that goes live while the broadcast is refused is answered as a duplicate |

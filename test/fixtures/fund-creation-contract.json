@@ -1,0 +1,341 @@
+{
+  "_about": [
+    "The fund-creation contract between the gas_sponsor client (Drupal), group_treasury, safe_smart_accounts and gas-sponsor-relayer.",
+    "The same file is committed in each repository's tests. Change it in all of them or none.",
+    "POST /send/safe-create asks the site's relayer to deploy one group's first Safe and pay the fee. GET /creations/{groupUuid} reads that group's creation slot.",
+    "Both routes need the site's bearer token. The relayer builds the factory call itself: the body names owners, threshold and salt, never calldata."
+  ],
+  "rules": {
+    "requestKeys": [
+      "actor",
+      "chainId",
+      "expiresAt",
+      "groupUuid",
+      "intentUuid",
+      "issuedAt",
+      "owners",
+      "predictedAddress",
+      "safeVersion",
+      "saltNonce",
+      "siteUuid",
+      "threshold"
+    ],
+    "actorKeys": [
+      "address",
+      "uuid"
+    ],
+    "extraKeysRefused": true,
+    "uuid": "RFC 4122 text form, lower case: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    "owners": "1 to 10 distinct, non-zero addresses; order is kept and is part of the address",
+    "threshold": "integer, 1 to count(owners)",
+    "saltNonce": "decimal string, no leading zeros, below 2^256",
+    "envelope": "expiresAt - issuedAt is 1 to 300 seconds; a new acceptance needs issuedAt <= now + 60 and now <= expiresAt; an exact repeat of an accepted intent is answered after expiry",
+    "chains": "only chains whose networks.json entry is sponsored and has fundCreation true (Ethereum Sepolia at first); version 1.4.1 only",
+    "intentDigest": "relayer-internal: the slot is the same intent when chainId, intentUuid, owners (checksummed, in order), predictedAddress, safeVersion, saltNonce and threshold are all equal. The actor and the envelope are not part of it.",
+    "slot": "one per (siteUuid, groupUuid), for ever. An exact repeat of the slot's intent gets the slot's answer; any other intent gets 409 slot_taken. Only a not_sent slot sends again, and only for the same intent.",
+    "quota": "new funded attempts: 1 per actor and 3 per site in a rolling 24 hours (operator-set). An attempt counts from the claim and is given back only when nothing was broadcast.",
+    "statuses": {
+      "sending": "claimed; the send is being prepared or broadcast, no hash known yet",
+      "pending": "broadcast; waiting for the receipt",
+      "confirmed": "mined and succeeded",
+      "failed": "mined and reverted; the attempt and the fee are spent; never sent again",
+      "not_sent": "refused or failed before broadcast; the same intent may be sent again"
+    },
+    "codes": {
+      "creation_not_found": "GET /creations/{groupUuid} 404 when the slot is empty; any other 404 (an unknown route) is not an answer about the group",
+      "payer_empty": "502 broadcast:false when the fee account cannot pay; nothing was sent and the same intent may be sent again",
+      "send_failed": "502 broadcast:false, the error for every failure before broadcast; reason payer_empty (the fee account cannot pay), fee_estimate_failed (the fee could not be read) or \"send failed\" (the node refused the transaction). Nothing was sent and the same intent may be sent again. A 502 without broadcast:false is not this answer (a gateway may have answered after a send)."
+    }
+  },
+  "request": {
+    "siteUuid": "5b0e7c1e-2f43-4a8e-9d55-0c6f6a0e9b11",
+    "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+    "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+    "actor": {
+      "uuid": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+      "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "chainId": 11155111,
+    "safeVersion": "1.4.1",
+    "owners": [
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    ],
+    "threshold": 2,
+    "saltNonce": "2404629881022896241",
+    "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+    "issuedAt": 1762905600,
+    "expiresAt": 1762905900
+  },
+  "responses": {
+    "accepted": {
+      "status": 202,
+      "body": {
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "pending",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "duplicate": {
+      "status": 202,
+      "body": {
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "pending",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111,
+        "duplicate": true
+      }
+    },
+    "duplicateConfirmed": {
+      "status": 202,
+      "body": {
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "confirmed",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111,
+        "duplicate": true
+      }
+    },
+    "badRequest": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "owners must be 1 to 10 distinct non-zero addresses"
+      }
+    },
+    "unexpectedField": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "unexpected_field"
+      }
+    },
+    "expired": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "expired"
+      }
+    },
+    "predictionMismatch": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "prediction_mismatch"
+      }
+    },
+    "creationDisabled": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "reason": "creation_disabled"
+      }
+    },
+    "siteMismatch": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "reason": "site_mismatch"
+      }
+    },
+    "groupNotEnrolled": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "reason": "group_not_enrolled"
+      }
+    },
+    "networkNotSupported": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "reason": "network_not_supported"
+      }
+    },
+    "slotTaken": {
+      "status": 409,
+      "body": {
+        "error": "conflict",
+        "reason": "slot_taken"
+      }
+    },
+    "simulationFailed": {
+      "status": 409,
+      "body": {
+        "error": "conflict",
+        "reason": "simulation_failed"
+      }
+    },
+    "setupLimitActor": {
+      "status": 429,
+      "body": {
+        "error": "setup_limit",
+        "scope": "actor",
+        "until": 1762992000
+      }
+    },
+    "setupLimitSite": {
+      "status": 429,
+      "body": {
+        "error": "setup_limit",
+        "scope": "site",
+        "until": 1762992000
+      }
+    },
+    "capReached": {
+      "status": 429,
+      "body": {
+        "error": "cap_reached",
+        "limit": "day",
+        "until": 1762992000,
+        "monthStartsAt": 1761955200
+      }
+    },
+    "notSentEmptyPayer": {
+      "status": 502,
+      "body": {
+        "error": "send_failed",
+        "reason": "payer_empty",
+        "broadcast": false
+      }
+    },
+    "notSentNodeRefused": {
+      "status": 502,
+      "body": {
+        "error": "send_failed",
+        "reason": "send failed",
+        "broadcast": false
+      }
+    },
+    "notSentFeeEstimate": {
+      "status": 502,
+      "body": {
+        "error": "send_failed",
+        "reason": "fee_estimate_failed",
+        "broadcast": false
+      }
+    },
+    "notSponsored": {
+      "status": 503,
+      "body": {
+        "error": "unavailable",
+        "reason": "chain_not_sponsored"
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": {
+        "error": "unauthorized"
+      }
+    }
+  },
+  "statusResponses": {
+    "pending": {
+      "status": 200,
+      "body": {
+        "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "pending",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "sending": {
+      "status": 200,
+      "body": {
+        "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "sending",
+        "hash": null,
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "confirmed": {
+      "status": 200,
+      "body": {
+        "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "confirmed",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "failed": {
+      "status": 200,
+      "body": {
+        "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "failed",
+        "hash": "0xabababababababababababababababababababababababababababababababab",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "notSent": {
+      "status": 200,
+      "body": {
+        "groupUuid": "a3f1c2d4-6b7e-4f80-9a1b-2c3d4e5f6a7b",
+        "intentUuid": "0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f",
+        "status": "not_sent",
+        "hash": null,
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B",
+        "chainId": 11155111
+      }
+    },
+    "none": {
+      "status": 404,
+      "body": {
+        "error": "not_found",
+        "reason": "creation_not_found"
+      }
+    }
+  },
+  "vectors": {
+    "factory": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+    "singleton": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+    "fallbackHandler": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
+    "proxyCreationCodeKeccak256": "0x1856e0ee08399d74e0ea0b03adca210aeade6f748969ac023cdcb4dd62dcaf5f",
+    "cases": [
+      {
+        "name": "sepolia-fund-1-deployed",
+        "owners": [
+          "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        ],
+        "threshold": 2,
+        "saltNonce": "2404629881022896241",
+        "initializer": "0xb63e800d0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000160000000000000000000000000fd0732dc9e303f09fcef3a7388ad10a83459ec990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb9226600000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000000",
+        "predictedAddress": "0x4c298d64B3c442ba31514A4e6D6961041e87E25B"
+      },
+      {
+        "name": "one-owner",
+        "owners": [
+          "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+        ],
+        "threshold": 1,
+        "saltNonce": "1",
+        "initializer": "0xb63e800d0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000140000000000000000000000000fd0732dc9e303f09fcef3a7388ad10a83459ec9900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000000",
+        "predictedAddress": "0x50CD2504ab75bF4B7F5cc9ddbA91B1a8117c6B84"
+      },
+      {
+        "name": "three-owners-threshold-2",
+        "owners": [
+          "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+          "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        ],
+        "threshold": 2,
+        "saltNonce": "9007199254740993",
+        "initializer": "0xb63e800d0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000180000000000000000000000000fd0732dc9e303f09fcef3a7388ad10a83459ec99000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000090f79bf6eb2c4f870365e785982e1f101e93b906000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb9226600000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c80000000000000000000000000000000000000000000000000000000000000000",
+        "predictedAddress": "0x2f09860B35B7F25062419e16b1FF9A6C91eC9A61"
+      }
+    ]
+  }
+}
