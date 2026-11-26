@@ -1,4 +1,4 @@
-// 25-28 fix round 2, HIGH 4 and MEDIUM 6 (Codex round 2, ruling (a)): a reservation is given back only with proof
+// A reservation is given back only with proof
 // of the transaction that took the send's nonce, read on one endpoint in one pass:
 //   (i)   at the `finalized` block, the relayer's nonce count is past the send's nonce;
 //   (ii)  the relayer's transaction with that nonce is found in a block from the send's first broadcast block to
@@ -44,7 +44,7 @@ function restart({ db, node }) {
   return { cap, queue: createQueue({ db, chains: node.chains, cap, address: ME, logger: quiet, events }) };
 }
 
-describe('round 2 HIGH 4: a release needs the transaction that took the nonce', () => {
+describe('a release needs the transaction that took the nonce', () => {
   test('release-proof: another transaction took the nonce in a finalized block: replaced, reservation given back, consuming hash stored', async () => {
     const { db, cap, node, queue, sent } = await oneSend();
     takenAt(node, OTHER);
@@ -59,7 +59,7 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
     assert.deepEqual(JSON.parse(ev.detail), { nonce: 5, hash: sent.hash, consumedBy: OTHER, block: '103' });
   });
 
-  test('release-proof: Codex repro: a lagging receipt index: our own hash took the nonce, its receipt reads "not found": nothing is released', async () => {
+  test('release-proof: repro: a lagging receipt index: our own hash took the nonce, its receipt reads "not found": nothing is released', async () => {
     const { db, cap, node, queue, sent } = await oneSend();
     takenAt(node, sent.hash); // our own transaction mined; neither endpoint has indexed its receipt yet
     node.state.block = 130n; // well past 12 blocks deep, where the old rule released
@@ -71,7 +71,7 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
     assert.notEqual(row.status, 'replaced');
     assert.ok(spentDay(cap) >= 1000n, 'held: the send is spent, its real cost is not known yet');
 
-    // Its receipt names block 103, where the transaction is (round 4, HIGH 1: a receipt must agree with the block).
+    // Its receipt names block 103, where the transaction is (a receipt must agree with the block).
     node.state.receipts[sent.hash] = receipt(sent.hash, 50n, 3n, 103n);
     await queue.tick();
     assert.equal(db.listPending()[0].status, 'mined');
@@ -81,7 +81,7 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
   test('release-proof: our own hash found in the block, with its receipt on the proof endpoint: settled to its real cost', async () => {
     const { db, cap, node, queue, sent } = await oneSend();
     takenAt(node, sent.hash);
-    node.state.proofReceipts = { [sent.hash]: receipt(sent.hash, 40n, 2n, 103n) }; // in the block that holds it (round 3, #3)
+    node.state.proofReceipts = { [sent.hash]: receipt(sent.hash, 40n, 2n, 103n) }; // in the block that holds it
     await queue.tick();
     const row = db.listPending()[0];
     assert.equal(row.status, 'mined');
@@ -150,7 +150,7 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
     assert.ok(spentDay(cap) >= 1000n, 'not given back');
   });
 
-  test('release-proof: a replaced send whose own hash later shows a receipt has the release undone, and is held, not settled, against the finalized OTHER (dedupe MEDIUM)', async () => {
+  test('release-proof: a replaced send whose own hash later shows a receipt has the release undone, and is held, not settled, against the finalized OTHER', async () => {
     const { db, cap, node, queue, sent } = await oneSend();
     takenAt(node, OTHER);
     await queue.tick();
@@ -166,14 +166,14 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
     assert.ok(db.listEvents().some((e) => e.kind === 'send_release_reversed'));
   });
 
-  test('release-proof: a late receipt for a send whose reservation entry is gone (released before round 2) records the real cost as a new entry', async () => {
+  test('release-proof: a late receipt for a send whose reservation entry is gone (released by an older version) records the real cost as a new entry', async () => {
     const { db, cap, node, queue } = setup();
     const h = `0x${'0e'.repeat(32)}`;
     // A safe-exec send from an older database: replaced, its reservation deleted (spend id 999 no longer exists).
     const id = db.insertPending({ chainId: CHAIN, nonce: 5, hash: h, to: ME, data: '0x', value: 0n, gas: 100n, maxFeePerGas: 10n, maxPriorityFeePerGas: 1n, sentBlock: 90n, spendId: 999, kind: 'safe-exec' });
     db.updatePending(id, { ...db.listPending()[0], status: 'replaced' });
     node.state.receipts[h] = receipt(h, 70n, 2n);
-    node.state.mined.push({ hash: h, nonce: 5, block: 101n }); // block 101 lists it (round 4, HIGH 1)
+    node.state.mined.push({ hash: h, nonce: 5, block: 101n }); // block 101 lists it
     await queue.tick();
     assert.equal(db.listPending()[0].status, 'mined');
     assert.equal(spentDay(cap), 140n);
@@ -214,7 +214,7 @@ describe('round 2 HIGH 4: a release needs the transaction that took the nonce', 
   });
 });
 
-describe('round 2 MEDIUM 6: stuck sends stay in reconcile and resolve only from chain evidence', () => {
+describe('stuck sends stay in reconcile and resolve only from chain evidence', () => {
   async function stuck() {
     const ctx = await oneSend();
     for (let i = 0; i < 4; i += 1) {
@@ -265,7 +265,7 @@ describe('round 2 MEDIUM 6: stuck sends stay in reconcile and resolve only from 
   });
 });
 
-describe('round 2 HIGH 4 (vi): GET /sends/:hash tells Drupal what happened to a send', () => {
+describe('GET /sends/:hash tells Drupal what happened to a send', () => {
   test('release-proof: GET /sends/:hash answers pending, then not_sent with the consuming hash; any of the send\'s hashes finds it; unknown is 404', async () => {
     const ctx = setup({ node: { me: RELAYER_ACCOUNT.address } });
     const s = await startStub({ chains: ctx.node.chains });

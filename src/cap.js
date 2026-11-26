@@ -8,7 +8,7 @@
 //   bond    a Reality.eth bond. It counts as spend until it is reclaimed.
 //   credit  an offset for a reclaimed bond. It carries the bond's own timestamp, so the pair
 //           leaves a window together.
-// Each entry has a state (25-28 round 2, HIGH 3):
+// Each entry has a state:
 //   open      an unresolved reservation, or a fee-bump increase of one. It counts against the current day AND
 //             month windows, whatever its time, until it is settled or released: a live liability never ages out.
 //   settled   real spend (or a credit). It counts in the windows its time falls in. A reservation is settled at
@@ -72,7 +72,7 @@ const clamp = (n) => (n < 0n ? 0n : n);
  * The spend ledger over a sqlite handle from db.js.
  * `now` returns integer milliseconds and can be replaced in tests.
  * `events` (events.js) receives one cap_reached event per window: after a refusal that names `until`, further refusals
- * of the same limit before that time add nothing (25-08, the feed Drupal turns into organizer alerts).
+ * of the same limit before that time add nothing (the feed Drupal turns into organizer alerts).
  */
 export function createCap({ db, caps = capsFromEnv({}), now = () => Date.now(), events = null }) {
   const reachedUntil = new Map();
@@ -85,7 +85,7 @@ export function createCap({ db, caps = capsFromEnv({}), now = () => Date.now(), 
     // and `month`; they are the ones that can leave a window.
     const day = entries.filter((e) => e.at > dayStart);
     const month = entries.filter((e) => e.at >= start);
-    // Every unresolved reservation counts in both current windows (HIGH 3, ruling (a)).
+    // Every unresolved reservation counts in both current windows.
     const open = db.openSpend().reduce((s, e) => s + e.wei, 0n);
     const sum = (list) => clamp(list.reduce((s, e) => s + signed(e), open));
     return { t, start, next, day, month, spentDay: sum(day), spentMonth: sum(month) };
@@ -145,10 +145,10 @@ export function createCap({ db, caps = capsFromEnv({}), now = () => Date.now(), 
     },
 
     /**
-     * Raise a reservation to `wei` in all before a fee bump (25-28 fix A): the replacement may cost up to its own gas
+     * Raise a reservation to `wei` in all before a fee bump: the replacement may cost up to its own gas
      * limit x maxFeePerGas + value, more than was reserved. The increase is checked against both current windows,
      * which already hold the unresolved reservation, and stored as its own open entry at this time: it is charged
-     * to the window it was checked in (round 2, HIGH 3). Throws CapReached and changes nothing when it does not fit.
+     * to the window it was checked in. Throws CapReached and changes nothing when it does not fit.
      * A reservation already holding `wei` or more is left as it is. Only an unresolved reservation can be raised.
      */
     extend(id, wei, chainId = null) {
@@ -188,7 +188,7 @@ export function createCap({ db, caps = capsFromEnv({}), now = () => Date.now(), 
 
     /**
      * A bond came back: offset `wei` against the bond entry `ref`, at the bond's own time. Without a bond entry
-     * (its send was replaced and the reservation given back, 25-28 fix A) there is nothing to offset: no credit is
+     * (its send was replaced and the reservation given back) there is nothing to offset: no credit is
      * stored, so a credit can never reduce other spend. Returns the credit's id, or null.
      */
     credit(ref, wei) {

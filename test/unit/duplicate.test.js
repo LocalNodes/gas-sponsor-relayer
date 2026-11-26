@@ -1,4 +1,4 @@
-// 25-28 dedupe round (orchestrator ruling): a retried send request must never become a second transaction. A request
+// A retried send request must never become a second transaction. A request
 // that repeats one already sent or waiting answers 202 with the existing hash and "duplicate": true, and nothing is
 // reserved, signed or broadcast for it. The check is made inside queue.enqueue, under the chain's serialisation, so
 // two concurrent requests cannot both pass it. A replaced send never happened, so it is no duplicate.

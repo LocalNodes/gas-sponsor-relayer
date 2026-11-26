@@ -1,4 +1,4 @@
-// One serial send queue per chain (D-01, RESEARCH Pattern 5 "Nonce").
+// One serial send queue per chain (D-01).
 //
 // The queue owns the nonce: it hands them out in request order, one send at a time per chain, and
 // passes the nonce and both fees explicitly to the wallet client. Every send is stored in the
@@ -7,7 +7,7 @@
 // replacement is 10%), at most three times; after that an alert event is stored.
 // Fees are BigInt wei throughout. `onMined(row, receipt)` is called once for each send that mines.
 //
-// Spend safety (25-28 fix A and round 2). A broadcast never exists without a `pending` row and a held reservation:
+// Spend safety. A broadcast never exists without a `pending` row and a held reservation:
 // - Every read happens before the broadcast. The transaction is signed first and its row, with its hash,
 //   is stored before it goes to the node, so a restart always finds a send that may be live.
 // - The broadcast goes to one endpoint, once (chain.js). Only that node's exact refusal (broadcastOutcome) means
@@ -18,18 +18,18 @@
 //   an older broadcast's answer never deletes newer state of the row.
 // - A fee bump first extends the reservation to the replacement's maximum cost (gas limit x
 //   maxFeePerGas + value). When the cap has no room, nothing is sent and the send waits as it is.
-// - A receipt of one of the send's own hashes makes it `confirming` (25-28 round 3, #2): its whole reservation stays
+// - A receipt of one of the send's own hashes makes it `confirming`: its whole reservation stays
 //   held, it is never bumped or rebroadcast, and every pass reads its receipt and the block at that height again on
 //   the proof endpoint. When the receipt is gone or another block holds that height, it goes back to pending, its
 //   maximum still held. Once the finalized block is at or past the receipt's block and that block is on the
 //   finalized chain (parent hashes followed down from the pinned finalized block), the send is settled: the real
 //   cost from that receipt replaces the reservation.
-// - Settling, releasing, marking confirming and going back on a reorg are each one DB transaction (round 3, #1).
+// - Settling, releasing, marking confirming and going back on a reorg are each one DB transaction.
 // - A reservation is given back for a send that went out only with proof that it never can mine (`consumer`):
 //   on the proof endpoint alone and in one pass, the relayer's nonce count at the `finalized` block is past the
 //   send's nonce, and the relayer's transaction with that nonce, found in a block from the send's first
-//   broadcast block to `finalized`, is none of the send's own hashes. That block is bound to the finalized chain
-//   (25-28 round 3, #3): the finalized block's hash is pinned, parent hashes followed down from it must arrive at
+//   broadcast block to `finalized`, is none of the send's own hashes. That block is bound to the finalized chain:
+//   the finalized block's hash is pinned, parent hashes followed down from it must arrive at
 //   the consuming block's hash, and the transaction (and, on our own hash, its receipt) must name that block. The
 //   send is marked `replaced` with that hash. A read that fails or disagrees, or a walk not finished in the pass,
 //   leaves the send unresolved, its reservation held.
@@ -57,7 +57,7 @@ export function bumpFee(fee) {
 
 const KNOWN = /already known|known transaction|already imported/i;
 // The node's own refusals of a raw transaction, in the exact words geth-family nodes use. Only these, answered as a
-// JSON-RPC error by the one endpoint the broadcast went to, mean nothing went out (25-28 round 2, HIGH 1).
+// JSON-RPC error by the one endpoint the broadcast went to, mean nothing went out.
 // "nonce too low" is not one: the nonce may have been taken by this very send.
 const REFUSALS = [
   /^insufficient funds for gas \* price \+ value/i,
@@ -74,6 +74,9 @@ const REFUSALS = [
 ];
 // The JSON-RPC code geth-family nodes give a refused transaction (viem: InvalidInputRpcError).
 const REFUSAL_CODE = -32000;
+// anvil's TransactionRejectedRpcError for a sender that cannot pay: nothing went out. Only this code with this
+// leading text is a refusal; any other -32003 answer stays uncertain.
+const INSUFFICIENT_FUNDS_CODE = -32003;
 // viem's errors for a request whose answer never arrived or could not be read.
 const TRANSPORT = new Set(['HttpRequestError', 'TimeoutError', 'SocketClosedError', 'WebSocketRequestError']);
 
@@ -84,6 +87,23 @@ const causes = (e) => {
 };
 const text = (e) => `${e?.shortMessage ?? ''} ${e?.details ?? ''} ${e?.message ?? ''}`;
 
+const FUNDS = /^insufficient funds for gas \* price \+ value/i;
+
+/**
+ * Whether the node refused the broadcast because the fee account cannot pay (D-37 point 3): its own JSON-RPC
+ * error, anywhere in the cause chain, with the funds refusal's leading words and code -32003 (anvil) or -32000
+ * (geth-family). Nothing went out. The node's words are its JSON-RPC answer, not an estimate's message.
+ */
+export function fundsRefusal(e) {
+  for (const x of causes(e)) {
+    if (x?.name !== 'RpcRequestError') continue;
+    const funds = FUNDS.test(String(x.details ?? '').trim());
+    if (x.code === INSUFFICIENT_FUNDS_CODE && funds) return true;
+    if (x.code === REFUSAL_CODE && funds) return true;
+  }
+  return false;
+}
+
 /**
  * What a failed broadcast means. 'accepted': the node already holds this very transaction. 'refused': the node
  * answered no, in one of the exact known refusals above, as its own JSON-RPC error (an RpcRequestError with code
@@ -93,6 +113,7 @@ const text = (e) => `${e?.shortMessage ?? ''} ${e?.details ?? ''} ${e?.message ?
 export function broadcastOutcome(e) {
   const list = causes(e);
   if (list.some((x) => KNOWN.test(text(x)))) return 'accepted';
+  if (fundsRefusal(e)) return 'refused';
   const answer = list.find((x) => x?.name === 'RpcRequestError' && x.code === REFUSAL_CODE);
   if (answer && REFUSALS.some((r) => r.test(String(answer.details ?? '').trim()))) return 'refused';
   return 'uncertain';
@@ -128,7 +149,7 @@ export function createQueue({
   // hash, so what was read once is good for every later walk.
   const knownBlocks = new Map();
   // Rows with a broadcast on its way (the first one or a replacement). Nothing else is sent for such a row, and the
-  // poll loop and reconcile leave it alone until the answer is in (25-28 round 2, HIGH 2).
+  // poll loop and reconcile leave it alone until the answer is in.
   const busy = new Set();
   let timer = null;
   let ticking = false;
@@ -159,9 +180,9 @@ export function createQueue({
   async function sendNext(chainId, buildTx, meta) {
     const clients = chains.get(chainId);
     if (!clients?.walletClient) throw new Error('chain_not_available');
-    // A chain the relayer does not sponsor (chain.js): nothing is built, signed or sent (25-28 round 3, #4).
+    // A chain the relayer does not sponsor (chain.js): nothing is built, signed or sent.
     if (clients.sponsored === false) throw new Error('chain_not_sponsored');
-    // A request that repeats a send already pending, stuck, confirming or mined (25-28 dedupe): nothing is built, signed,
+    // A request that repeats a send already pending, stuck, confirming or mined: nothing is built, signed,
     // stored or sent, and the caller gets the existing send's current hash. This runs under the chain's serialisation, so
     // two concurrent requests cannot both pass it. A replaced send never happened and is no duplicate.
     if (meta.dedupeKey) {
@@ -174,7 +195,7 @@ export function createQueue({
     // The first broadcast block is read on the proof endpoint before the nonce: no transaction can take the nonce
     // in an earlier block, so the release proof searches from here.
     const sentBlock = await readerOf(clients).getBlockNumber({ cacheTime: 0 });
-    // The pending count on the proof endpoint and on the fallback both (25-28 dedupe, round-2 Q5): the higher wins, so
+    // The pending count on the proof endpoint and on the fallback both: the higher wins, so
     // one lagging endpoint cannot hand out a nonce already used.
     const counts = await Promise.all([readerOf(clients), clients.publicClient].map((c) => c.getTransactionCount({ address, blockTag: 'pending' })));
     const chainPending = Math.max(...counts.map(Number));
@@ -220,7 +241,7 @@ export function createQueue({
 
   /**
    * The first receipt found among every hash this send has had, with the hash it was asked for. `unclear` when a
-   * lookup failed. A receipt of another transaction than the hash asked for is no answer (25-28 round 4, HIGH 1).
+   * lookup failed. A receipt of another transaction than the hash asked for is no answer.
    */
   async function findReceipt(publicClient, row) {
     let unclear = false;
@@ -247,13 +268,13 @@ export function createQueue({
 
   /**
    * Settle a send whose own receipt is in a finalized block on the finalized chain: its reservation becomes the real
-   * cost. The status, the ledger and the block are one transaction (25-28 round 3, #1): a crash or a failed write
+   * cost. The status, the ledger and the block are one transaction: a crash or a failed write
    * anywhere in it leaves the send as it was, its reservation open, for the next pass. Never a mined row with an
    * open reservation, which boot would otherwise take for an orphan.
    */
   function settle(row, receipt) {
     db.atomically(() => {
-      db.updatePending(row.id, { ...row, status: 'mined', consumedBy: receipt.transactionHash ?? null, consumedBlock: receipt.blockNumber ?? null, minedBlockHash: receipt.blockHash ?? null });
+      db.updatePending(row.id, { ...row, status: 'mined', consumedBy: receipt.transactionHash ?? null, consumedBlock: receipt.blockNumber ?? null, minedBlockHash: receipt.blockHash ?? null, receiptStatus: receipt.status ?? null });
       // A ledger entry's kind is send, bond or credit, never the send's own kind (safe-exec, reality-add, ...).
       if (row.spendId !== null) cap.record(receipt, BigInt(row.value), { id: row.spendId, chainId: row.chainId });
       else cap.record(receipt, BigInt(row.value), { chainId: row.chainId });
@@ -263,13 +284,13 @@ export function createQueue({
   }
 
   /**
-   * One of the send's own hashes has a receipt bound to its block, not final yet (25-28 round 3, #2): the send is
+   * One of the send's own hashes has a receipt bound to its block, not final yet: the send is
    * confirming. Its whole reservation stays held until the receipt's block is finalized. A send marked replaced never
-   * gets here as such: seen() holds its reservation again first (25-28 round 5). Returns the row as stored.
+   * gets here as such: seen() holds its reservation again first. Returns the row as stored.
    */
   function markConfirming(row, receipt) {
     db.atomically(() => {
-      db.updatePending(row.id, { ...row, status: 'confirming', consumedBy: receipt.transactionHash, consumedBlock: BigInt(receipt.blockNumber), minedBlockHash: receipt.blockHash.toLowerCase() });
+      db.updatePending(row.id, { ...row, status: 'confirming', consumedBy: receipt.transactionHash, consumedBlock: BigInt(receipt.blockNumber), minedBlockHash: receipt.blockHash.toLowerCase(), receiptStatus: receipt.status ?? null });
     });
     notify(row, receipt);
     return db.getPending(row.id);
@@ -292,7 +313,7 @@ export function createQueue({
 
   /** Proven: another transaction took this send's nonce in a finalized block, so no broadcast of it can mine. */
   function replace(row, proof) {
-    // One transaction, like a settlement (25-28 round 3, #1): replaced and released together, or neither.
+    // One transaction, like a settlement: replaced and released together, or neither.
     db.atomically(() => {
       db.updatePending(row.id, { ...row, status: 'replaced', consumedBy: proof.hash, consumedBlock: proof.block });
       if (row.spendId !== null) cap.release({ id: row.spendId });
@@ -314,7 +335,7 @@ export function createQueue({
       blocks = new Map();
       knownBlocks.set(key, blocks);
     } else if (blocks.size > keptBlocks) {
-      // Pruned outside the walks, never cleared under one (25-28 dedupe, round-3 Q2 (b)): a walk runs from the
+      // Pruned outside the walks, never cleared under one: a walk runs from the
       // finalized block down to a send's first broadcast block or its receipt's block, so no walk reaches below the
       // lowest such height of the sends still unresolved on this chain. Only blocks below it go.
       let floor = null;
@@ -354,7 +375,7 @@ export function createQueue({
         const block = await reader.getBlock({ blockHash: hash });
         if (!same(block?.hash, hash) || typeof block.parentHash !== 'string') throw new Error('block_by_hash');
         b = { number: BigInt(block.number), parentHash: block.parentHash.toLowerCase() };
-        // Kept only at the height expected: a wrong answer is read again next pass (25-28 round 4, MEDIUM 4).
+        // Kept only at the height expected: a wrong answer is read again next pass.
         if (b.number === number) blocks.set(hash, b);
       }
       if (b.number !== number) throw new Error('block_height');
@@ -373,7 +394,7 @@ export function createQueue({
       return same(h, hash);
     }
     /**
-     * The binding of a receipt of one of the send's own hashes to its transaction (25-28 round 4, HIGH 1), as the
+     * The binding of a receipt of one of the send's own hashes to its transaction, as the
      * consuming-transaction proof binds them: the block at the receipt's height, read by number with its
      * transactions, must list exactly one transaction with the receipt's hash, and the transaction and the receipt
      * must both name that block, by hash and by height. 'bound' when they agree; 'moved' when the block at that
@@ -424,7 +445,7 @@ export function createQueue({
           const hits = (block.transactions ?? []).filter((t) => typeof t === 'object' && same(t.from, address) && BigInt(t.nonce) === nonce);
           if (hits.length !== 1 || typeof hits[0].hash !== 'string') return null;
           const t = hits[0];
-          // (round 3, #3) The transaction names this block as its own, and this block is on the chain that ends in
+          // The transaction names this block as its own, and this block is on the chain that ends in
           // the pinned finalized block: parent hashes followed down from it arrive at this hash at this height.
           if (!same(t.blockHash, block.hash) || t.blockNumber === undefined || t.blockNumber === null || BigInt(t.blockNumber) !== lo) return null;
           if (!(await onFinalChain(lo, block.hash))) return null;
@@ -462,7 +483,7 @@ export function createQueue({
     if (!receipt) return reorged(row, 'receipt_gone', head);
     if (!same(receipt.transactionHash, row.consumedBy)) return null;
     if (!same(receipt.blockHash, row.minedBlockHash) || BigInt(receipt.blockNumber) !== height) return reorged(row, 'receipt_moved', head);
-    // The block at that height must still be the receipt's and list the transaction (25-28 round 4, HIGH 1).
+    // The block at that height must still be the receipt's and list the transaction.
     let where;
     try {
       where = await proof.ownIn(row, receipt);
@@ -480,14 +501,14 @@ export function createQueue({
       return null;
     }
     if (!onChain) return reorged(row, 'not_on_finalized_chain', head);
-    // (25-28 dedupe, Codex round-5 MEDIUM) The finalized chain can hold only one transaction at this nonce. When the
+    // The finalized chain can hold only one transaction at this nonce. When the
     // consuming-transaction proof names another one, or another block, the evidence contradicts itself (only
     // inconsistent RPC answers produce it): unresolved, the whole maximum held. A proof that cannot be read now
     // contradicts nothing.
     const c = await proof.consumer(row);
     if (c !== null && (!c.own || !same(c.hash, row.consumedBy) || c.block !== height)) {
       // Held for good, out of the cap, until the evidence changes: listed for an operator (needsOperator), and logged
-      // once, when it first enters this state (orchestrator 2026-11-11).
+      // once, when it first enters this state.
       if (row.heldReason !== HELD_CONFLICT) {
         db.setHeldReason(row.id, HELD_CONFLICT);
         logger.error(`ALERT send on ${row.chainId} nonce ${row.nonce} held: the node gave conflicting evidence (own hash ${row.consumedBy} at block ${height}, finalized consumer ${c.hash} at block ${c.block}); its maximum stays reserved until an operator looks at it`);
@@ -500,7 +521,7 @@ export function createQueue({
 
   /**
    * One of the send's own hashes has a receipt on the read client. A send marked replaced is held again first, before
-   * any read that can fail (25-28 round 5): its reservation and every fee-bump increase count again, and it goes back
+   * any read that can fail: its reservation and every fee-bump increase count again, and it goes back
    * to pending. The receipt the relayer keeps is the proof endpoint's: when that endpoint does not have it yet, or the
    * receipt is not bound to its block, nothing more changes ('seen': no fee bump, no proof). Then the send is
    * confirming, and settles at once when its block is already final.
@@ -524,7 +545,7 @@ export function createQueue({
       return 'seen';
     }
     if (!receipt || !same(receipt.transactionHash, found.hash) || typeof receipt.blockHash !== 'string' || receipt.blockNumber === undefined || receipt.blockNumber === null) return 'seen';
-    // Marked confirming only when the receipt is bound to the transaction, as at settlement (25-28 round 4, HIGH 1).
+    // Marked confirming only when the receipt is bound to the transaction, as at settlement.
     try {
       if ((await proof.ownIn(row, receipt)) !== 'bound') return 'seen';
     } catch {
@@ -578,7 +599,7 @@ export function createQueue({
   }
 
   /**
-   * One row's chain evidence read again now, as a pass would (25-28 dedupe, round-2 Q2 (b)): an operator can trigger a
+   * One row's chain evidence read again now, as a pass would: an operator can trigger a
    * check, never declare an outcome. Returns the row as stored afterwards, or null for an unknown hash. A row with a
    * broadcast on its way, or a pass already running, is left alone.
    */
@@ -631,7 +652,7 @@ export function createQueue({
     /**
      * At boot, before anything sends.
      * - A reservation still open on a send row that says it is resolved (mined or replaced) is recovered, never given
-     *   back: a database from before 25-28 round 3 could store the status without the ledger change. The row goes
+     *   back: an older database could store the status without the ledger change. The row goes
      *   back to pending, so it settles from its receipt or is released only by the proof, as any waiting send.
      * - An unresolved reservation that no send row holds, in any status, is given back. A row is always stored before
      *   its broadcast, so without one nothing went out (the process stopped between the reserve and the row, or after
@@ -665,13 +686,13 @@ export function createQueue({
      */
     async reconcile() {
       const out = { mined: 0, replaced: 0, rebroadcast: 0 };
-      // Stuck sends too (round 2, MEDIUM 6): they resolve only from the chain, like any other. Confirming sends too
-      // (round 3, #2): they settle at finality, or go back to pending on a reorg.
+      // Stuck sends too: they resolve only from the chain, like any other. Confirming sends too:
+      // they settle at finality, or go back to pending on a reorg.
       const waiting = (s) => s === 'pending' || s === 'stuck' || s === 'confirming';
       const rows = db.listPending().filter((r) => waiting(r.status));
       const passes = new Map();
-      // The head per chain, read once: a send found reorged here waits a full bump interval from now (25-28 round 4,
-      // Flash LOW 1). Unreadable: null, and the send keeps its own first block.
+      // The head per chain, read once: a send found reorged here waits a full bump interval from now.
+      // Unreadable: null, and the send keeps its own first block.
       const heads = new Map();
       for (const listed of rows) {
         // Read again: an earlier step may have changed or deleted the row.
@@ -702,7 +723,7 @@ export function createQueue({
         } else if (row.nonce >= pending && clients.sponsored !== false) {
           // The node no longer holds it: the identical signed transaction goes out again (same hash). For a stuck
           // send that is its last replacement, which its reservation already covers. Never on a chain the relayer
-          // does not sponsor (25-28 round 4, HIGH 2): there a stored send is held read-only, its reservation kept.
+          // does not sponsor: there a stored send is held read-only, its reservation kept.
           try {
             const r = await holding(row.id, () => resend(clients, row, { maxFeePerGas: BigInt(row.maxFeePerGas), maxPriorityFeePerGas: BigInt(row.maxPriorityFeePerGas) }));
             if (r === null) continue;
@@ -722,7 +743,7 @@ export function createQueue({
       ticking = true;
       try {
         // Replaced sends too: their own hashes are still looked up, so a late receipt settles the real cost. Confirming
-        // sends too: they settle once their receipt's block is finalized (25-28 round 3, #2).
+        // sends too: they settle once their receipt's block is finalized.
         const rows = db.listPending().filter((r) => r.status === 'pending' || r.status === 'stuck' || r.status === 'replaced' || r.status === 'confirming');
         const byChain = new Map();
         for (const r of rows) byChain.set(r.chainId, [...(byChain.get(r.chainId) ?? []), r]);
@@ -745,7 +766,7 @@ export function createQueue({
             if (!row || row.status !== listed.status) continue;
             if ((await resolve(publicClient, row, proof, block)) !== null || row.status === 'replaced') continue;
             // A chain the relayer does not sponsor (chain.js): receipts and the proof run above, but nothing is bumped
-            // or sent again; the send keeps its reservation until the chain resolves it (25-28 round 4, HIGH 2).
+            // or sent again; the send keeps its reservation until the chain resolves it.
             if (clients.sponsored === false) continue;
             if (row.status !== 'pending' || block - BigInt(row.sentBlock) < bumpAfterBlocks) continue;
             if (row.attempts >= maxBumps) {
@@ -755,7 +776,7 @@ export function createQueue({
               continue;
             }
             const fees = { maxFeePerGas: bumpFee(BigInt(row.maxFeePerGas)), maxPriorityFeePerGas: bumpFee(BigInt(row.maxPriorityFeePerGas)) };
-            // The replacement may cost up to its own maximum: the reservation must cover that first (25-28 fix A).
+            // The replacement may cost up to its own maximum: the reservation must cover that first.
             // A send queued without a reservation has no ledger entry to extend; every route reserves before it queues.
             if (row.spendId !== null) {
               try {

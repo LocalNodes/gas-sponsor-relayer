@@ -19,8 +19,16 @@
     "ensUniversalHelper": "0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe",
     "hub": "https://testnet.hub.snapshot.org",
     "sequencer": "https://testnet.seq.snapshot.org",
+    "fundCreation": true,
+    "safeProxyFactory": "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
+    "safeSingletonL2": "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
+    "safeFallbackHandler": "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99",
     "_sources": {
       "rpcUrls": "Same public URLs as the fresh3 network registry: localnodes_web3 config/install safe_smart_accounts.network.ethereum_sepolia.yml, rpc_urls. Used only when SPONSOR_RELAYER_RPC_URL_11155111 is unset.",
+      "fundCreation": "Sponsored fund creation (POST /send/safe-create) is served on this chain only. Safe 1.4.1 only.",
+      "safeProxyFactory": "Safe 1.4.1 safe_proxy_factory, safe-deployments v1.4.1; the fund-creation contract fixture's vectors.factory",
+      "safeSingletonL2": "Safe 1.4.1 safe_l2 singleton, safe-deployments v1.4.1; the fund-creation contract fixture's vectors.singleton",
+      "safeFallbackHandler": "Safe 1.4.1 compatibility_fallback_handler, safe-deployments v1.4.1; the fund-creation contract fixture's vectors.fallbackHandler",
       "multiSend": "Safe 1.4.1 multi_send, safe-deployments v1.4.1 (fresh3 tests/e2e/fork/vendor/safe-1.4.1)",
       "multiSendCallOnly": "Safe 1.4.1 multi_send_call_only, safe-deployments v1.4.1",
       "createCall": "Safe 1.4.1 create_call, safe-deployments v1.4.1",
@@ -67,7 +75,7 @@
       "hats": "Hats Protocol, same address on Base Sepolia",
       "hub": "Snapshot testnet hub",
       "sequencer": "Snapshot testnet sequencer",
-      "sponsoring": "Off until Phase 30 (25-28 round 3, ruling on Codex HIGH 4): an OP-stack send also pays an L1 data fee and an operator fee, which the spend cap does not count yet. Reads and GET /status still serve this chain."
+      "sponsoring": "Off for now: an OP-stack send also pays an L1 data fee and an operator fee, which the spend cap does not count yet. Reads and GET /status still serve this chain."
     }
   }
 }

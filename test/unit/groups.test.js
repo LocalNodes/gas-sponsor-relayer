@@ -1,4 +1,4 @@
-// Per-Group module discovery: the relayer learns a Group's Reality module from the chain only (25-06, TM-77).
+// Per-Group module discovery: the relayer learns a Group's Reality module from the chain only (TM-77).
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

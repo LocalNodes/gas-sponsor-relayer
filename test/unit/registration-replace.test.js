@@ -1,5 +1,5 @@
-// A Safe may replace its registered space while no name job for the old space has started registering
-// (25-19 follow-up, orchestrator ruling 2026-11-08 answer 1). The case: someone takes the Group's name
+// A Safe may replace its registered space while no name job for the old space has started registering.
+// The case: someone takes the Group's name
 // between registration and name reservation, so the Group needs a new space and a new name.
 //
 // The chain is a fake EIP-1271 check with real ECDSA over the registration digest: a Safe accepts a

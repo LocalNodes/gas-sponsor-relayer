@@ -1,4 +1,4 @@
-// Fix A (25-28, Codex concern 3 and the Argon review): the spend cap holds for fee bumps and for broadcasts whose
+// The spend cap holds for fee bumps and for broadcasts whose
 // outcome is uncertain, and every reservation lives exactly as long as a broadcast of its send can still mine.
 // Real cap, queue, pipeline and server modules over an in-memory database; only the RPC is stubbed.
 import { describe, test } from 'node:test';
@@ -44,7 +44,7 @@ function fakeChain(o = {}) {
       return blockTag === 'pending' ? s.pending : s.latest;
     },
     async getBlockNumber() { if (s.blockError()) throw down(); return s.block; },
-    // Every block this fake has used is final (25-28 round 3: a receipt settles at finality).
+    // Every block this fake has used is final (a receipt settles at finality).
     getBlock: finalBlocks(() => topOf(s.block, s.receipts), () => s.included),
     async getTransactionReceipt({ hash }) {
       if (s.receiptError) throw s.receiptError;
@@ -93,7 +93,7 @@ const receipt = (hash, gasUsed = 50n, price = 3n) => ({ gasUsed, effectiveGasPri
 const settle = (p) => p.then((v) => ({ value: v }), (error) => ({ error }));
 const allowAll = { check: () => ({ ok: true }) };
 
-describe('fix A: fee bumps stay inside the spend cap', () => {
+describe('fee bumps stay inside the spend cap', () => {
   test('spend-safety: at a full cap (1000 of 1000 wei reserved) a fee bump is never broadcast; the send stays pending', async () => {
     const { db, cap, chain, queue } = setup({ dayWei: 1000n });
     const reservation = cap.reserve(CHAIN, 1000n);
@@ -132,7 +132,7 @@ describe('fix A: fee bumps stay inside the spend cap', () => {
   });
 });
 
-describe('fix A: a broadcast whose outcome is uncertain keeps its reservation', () => {
+describe('a broadcast whose outcome is uncertain keeps its reservation', () => {
   test('spend-safety: POST /send/safe-exec: a failing block-number read after the node took the send keeps the reservation and the pending row', async () => {
     const networks = loadNetworks();
     let s;
@@ -222,7 +222,7 @@ describe('fix A: a broadcast whose outcome is uncertain keeps its reservation', 
   });
 });
 
-describe('fix A: a restart finds a live broadcast', () => {
+describe('a restart finds a live broadcast', () => {
   test('spend-safety: restart with the send still in the node\'s pool: reconcile finds it, holds the reservation and sends nothing again', async () => {
     const first = setup({ chain: { afterAccept: lost() } });
     const reservation = first.cap.reserve(CHAIN, 1000n);
@@ -261,7 +261,7 @@ describe('fix A: a restart finds a live broadcast', () => {
   });
 });
 
-describe('fix A: the reservation lifecycle (Argon review)', () => {
+describe('the reservation lifecycle', () => {
   /** Enqueue one reserved send at nonce 5 (sent at block 100). */
   async function oneSend(o = {}) {
     const ctx = setup(o);
@@ -333,10 +333,10 @@ describe('fix A: the reservation lifecycle (Argon review)', () => {
   });
 
   // The release rule itself (a nonce taken by another transaction, proven at the finalized block) is in
-  // release-proof.test.js (25-28 round 2): it replaced the 12-blocks-deep rule these tests used to hold.
+  // release-proof.test.js: it replaced the 12-blocks-deep rule these tests used to hold.
 });
 
-describe('fix A: the real viem wallet client signs before it sends', () => {
+describe('the real viem wallet client signs before it sends', () => {
   test('spend-safety: with a real viem wallet client the stored hash is the hash the node answers, and a resend signs the same bytes', async () => {
     const account = privateKeyToAccount(privateKeyOf(RELAYER_ACCOUNT));
     const chain = defineChain({ id: CHAIN, name: 'test', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: ['http://rpc.invalid'] } } });

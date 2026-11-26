@@ -50,25 +50,28 @@ Every route except `GET /healthz` needs `Authorization: Bearer <SPONSOR_RELAYER_
 or wrong token is 401 and sends nothing. Quantities of wei are decimal strings of whole numbers,
 never JSON numbers.
 
-| Endpoint | Added by | Purpose |
-|---|---|---|
-| `GET /healthz` | 25-04 | Liveness. No auth, answers whether or not web3 is on. `200` with the plain text body `ok` (25-05 changed it from JSON, for the container health check) |
-| `GET /status` | 25-04, cap fields 25-05 | Address, balance per chain, pending, cap and spend, covered Groups |
-| `POST /groups` | 25-04 | Register a Group's Safe (D-18) |
-| `POST /send/safe-exec` | 25-04 | Send an owner-signed `Safe.execTransaction` and pay the gas |
-| `POST /send/ens` | 25-06 | Register the Group's ENS name with the Safe as owner; the relayer pays (see below) |
-| `GET /jobs/:id` | 25-06 | State of an ENS registration job: `pending`, `committed`, `registered` or `failed`, with the transaction hashes |
-| `GET /sends/:hash` | 25-28 round 2 | What happened to a send: `pending`, `mined`, or `not_sent` with the hash of the transaction that took its nonce (see below) |
-| `GET /ops/recheck` | 25-28 dedupe | The sends an operator should look at, each with a plain reason: stuck ones, and ones held because the node gave conflicting evidence (see below) |
-| `POST /ops/recheck` | 25-28 dedupe | `{"hash": "0x..."}` and nothing else: read that send's chain evidence again now and answer its `GET /sends/:hash` view. It never takes an outcome from the caller |
-| `POST /send/reality/add` | 25-07 | `addProposal` on the Group's Reality module |
-| `POST /send/reality/answer` | 25-07 | `submitAnswer` with the minimum bond |
-| `POST /send/reality/execute` | 25-07 | `executeProposalWithIndex` |
-| `GET /events?since=<id>` | 25-08 | The event feed: what the wrong-answer watcher did and saw, and the alerts the cap, the queue and the balance check raise (see "Wrong answers") |
+| Endpoint | Purpose |
+|---|---|
+| `GET /healthz` | Liveness. No auth, answers whether or not web3 is on. `200` with the plain text body `ok` (for the container health check) |
+| `GET /status` | Address, balance per chain, pending, cap and spend, covered Groups |
+| `POST /groups` | Register a Group's Safe (D-18) |
+| `POST /send/safe-exec` | Send an owner-signed `Safe.execTransaction` and pay the gas |
+| `POST /send/ens` | Register the Group's ENS name with the Safe as owner; the relayer pays (see below) |
+| `GET /jobs/:id` | State of an ENS registration job: `pending`, `committed`, `registered` or `failed`, with the transaction hashes |
+| `GET /sends/:hash` | What happened to a send: `pending`, `mined`, or `not_sent` with the hash of the transaction that took its nonce (see below) |
+| `GET /ops/recheck` | The sends an operator should look at, each with a plain reason: stuck ones, and ones held because the node gave conflicting evidence (see below) |
+| `POST /ops/recheck` | `{"hash": "0x..."}` and nothing else: read that send's chain evidence again now and answer its `GET /sends/:hash` view. It never takes an outcome from the caller |
+| `POST /send/reality/add` | `addProposal` on the Group's Reality module |
+| `POST /send/reality/answer` | `submitAnswer` with the minimum bond |
+| `POST /send/reality/execute` | `executeProposalWithIndex` |
+| `POST /send/safe-create` | Create an enrolled Group's first Safe (1.4.1) through the canonical factory; the relayer builds the call and pays the gas (see "Sponsored fund creation") |
+| `GET /creations/:groupUuid` | This site's creation slot for a Group: `sending`, `pending`, `confirmed`, `failed` or `not_sent`, with the hash and predicted address; 404 `{"error": "not_found", "reason": "creation_not_found"}` when there is none (an unknown route's 404 has no reason) |
+| `GET /events?since=<id>` | The event feed: what the wrong-answer watcher did and saw, and the alerts the cap, the queue and the balance check raise (see "Wrong answers") |
+| `POST /site` | The site tells the relayer which site it is, once. Body `{"siteUuid": "<lower-case uuid>"}` and nothing else: 201 bound, 200 already bound to this site, 409 `site_mismatch` for another site, 403 `creation_disabled` while the policy is off, 400 `invalid_body` (see "Site enrolment") |
+| `GET /site` | `{"bound": false}`, or `{"bound": true, "siteUuid": "..."}` for the site this relayer serves (the policy file's, else the stored one) |
 
-Endpoints marked 25-05 to 25-08 are listed so the Drupal client (`gas_sponsor`, 25-10) has one
-place to read the whole contract. Their request and response shapes are set by the plan that adds
-them, and that plan updates this table.
+Every endpoint is listed so the Drupal client (`gas_sponsor`) has one place to read the whole
+contract. A change to an endpoint's request or response shape updates this table.
 
 ### Error codes
 
@@ -77,21 +80,21 @@ them, and that plan updates this table.
 | 400 | `{"error": "bad_request", "reason"}` | The JSON is malformed or a field has the wrong type |
 | 401 | `{"error": "unauthorized"}` | Missing or wrong bearer token (or none configured) |
 | 403 | `{"error": "forbidden", "reason"}` | Policy refusal; nothing was sent. `reason` is one of `unknown_chain`, `no_ens_on_network`, `label_not_space`, `registration_signature_invalid`, `safe_not_registered`, `refund_fields_must_be_zero`, `target_not_allowed`, `selector_not_allowed`, `delegatecall_target_not_allowed`, `bad_operation` |
-| 409 | `{"error": "conflict", "reason"}` | The request conflicts with current state: `safe_registered_with_another_space` on `/groups`, `name_taken` or `job_in_progress` on `/send/ens`, or `simulation_failed` on `/send/safe-exec` (the `eth_call` did not return true: a stale Safe nonce, bad signatures, or an inner call that fails) |
+| 409 | `{"error": "conflict", "reason"}` | The request conflicts with current state: `safe_registered_with_another_space` on `/groups`, `name_taken` or `job_in_progress` on `/send/ens`, or `simulation_failed` on `/send/safe-exec` (the `eth_call` did not return true: a stale Safe nonce, bad signatures, or an inner call that fails). When an estimate or the simulation could not be had at all, the answer is not 409 but 502 `fee_estimate_failed` or `simulation_unavailable` with `"broadcast": false` (see `POST /send/safe-exec`) |
 | 413 | `{"error": "body_too_large"}` | Body over 64 KB |
 | 429 | `{"error": "cap_reached", "limit": "day" or "month", "until": <ISO time>, "monthStartsAt": <ISO time>}` | A spend cap would be exceeded and nothing was sent. `until` is the first moment the send would fit (the 24-hour window frees up, or the month resets). `limit` is the cap whose `until` is later. `monthStartsAt` is the start of the current UTC calendar month: `gas_sponsor` computes the month name for the steward message "The limit for <Month> is reached." from it, so no month name is ever hard-coded |
 | 502 | `{"error": "send_failed", "reason", "broadcast": false}` | The node refused the transaction in one of the exact refusals listed under "Spend caps" (for example the relayer is out of ETH). Nothing was broadcast. Any other failure of the broadcast (a lost answer, an error the relayer does not recognise) is a `202` with the hash, not a 502. A 502 can also come before any broadcast (`fee_estimate_failed`, or a read that failed while the transaction was being prepared or signed). Every 502 the relayer itself answers carries `"broadcast": false`; a 502 without it (from a proxy in front of the relayer) says nothing about whether a transaction went out |
 | 404 | `{"error": "not_found", "reason": "send_not_found"}` | `GET /sends/:hash`: no send of this relayer ever had that hash |
-| 503 | `{"error": "unavailable", "reason"}` | `not_configured` (no usable key, or no community name for `/groups`), `chain_not_available`, or `chain_not_sponsored` (see "Base Sepolia: no sponsoring until Phase 30"). Nothing was reserved or sent |
+| 503 | `{"error": "unavailable", "reason"}` | `not_configured` (no usable key, or no community name for `/groups`), `chain_not_available`, or `chain_not_sponsored` (see "Base Sepolia: no sponsoring for now"). Nothing was reserved or sent |
 | 503 | `{"error": "web3_disabled"}` | `WEB3_ENABLED` is not exactly `true`. Every route but `/healthz`, valid token or not. The HTTP reason phrase is also `web3_disabled` |
 
 Every 403 is also logged as `refused <reason> <chainId> <target> <selector>`, without request bodies.
 
-### Base Sepolia: no sponsoring until Phase 30
+### Base Sepolia: no sponsoring for now
 
 The relayer does not pay for sends on Base Sepolia (chain `84532`). On an OP-stack chain a transaction also pays an
 L1 data fee and an operator fee, and the spend cap counts only execution gas and value, so the cap could not hold
-there (25-28 round 3, Codex HIGH 4). `config/networks.json` marks the chain `"sponsoring": false`. Every send route
+there. `config/networks.json` marks the chain `"sponsoring": false`. Every send route
 (`/send/safe-exec`, `/send/reality/*`, `/send/ens`), the shared send pipeline (Reality steps, bond reclaim, the
 watcher's challenge) and the queue itself answer such a send with
 
@@ -101,11 +104,11 @@ watcher's challenge) and the queue itself answer such a send with
 
 before any gas estimate, reservation or broadcast: nothing is held and nothing is sent. `gas_sponsor` maps a 503 to
 `SponsorNotConfiguredException` ("this relayer serves no such network"), one of its "nothing was sent" answers.
-A send already stored for such a chain (from before the switch) is held read-only (25-28 round 4): its receipts and
+A send already stored for such a chain (from before the switch) is held read-only: its receipts and
 the release proof still run, so it settles or is released as any other, and its reservation stays until then, but
 it is never broadcast again at boot and never fee-bumped.
-Reads stay: `GET /status` still shows the chain's balance, and `POST /groups` still registers a Safe there. Phase 30
-turns sponsoring back on once reservations and settlement count the whole OP-stack fee (viem's `estimateTotalFee`
+Reads stay: `GET /status` still shows the chain's balance, and `POST /groups` still registers a Safe there. Sponsoring
+comes back on once reservations and settlement count the whole OP-stack fee (viem's `estimateTotalFee`
 before the send, the receipt's `l1Fee` after it).
 
 ### `GET /status`
@@ -116,8 +119,8 @@ before the send, the receipt's `l1Fee` after it).
   "address": "0x...",
   "community": "My Community",
   "chains": {
-    "11155111": { "balanceWei": "5000000000000000000", "pending": 0 },
-    "84532": { "error": "unreachable" }
+    "11155111": { "balanceWei": "5000000000000000000", "pending": 0, "covered": true },
+    "84532": { "error": "unreachable", "covered": false }
   },
   "cap": {
     "dayWei": "50000000000000000",
@@ -145,6 +148,16 @@ Group's module lookup, get at most 3 seconds (`STATUS_READ_TIMEOUT_MS`): a chain
 by then reads `{"error": "unreachable"}` and its Groups read `"module": null`, while the other chains
 keep their values. A stalled RPC therefore costs one 3-second wait, not the whole answer.
 
+`covered` is on every network entry, an unreachable one too, and is always JSON `true` or JSON `false`:
+`true` when the fee service pays for sends on that network, `false` when it does not. A network the relayer
+is set up for but does not sponsor (Base Sepolia, as shipped) is still listed, with `"covered": false`, so
+the site can tell "not paid here" from "not listed". It says nothing about whether the network is reachable
+or whether the relayer's balance is enough.
+
+Deploy this relayer before any site reads the mark. A site reads a network entry without `covered` (an older
+relayer, or a status it stored before the upgrade) as "not said", never as "not covered": it waits and retries
+until its first status refresh from this relayer, and never offers anyone to pay the fee on that answer.
+
 `cap` is the relayer's own spend limit (D-01, D-19), always present. Wei values are decimal strings,
 times are ISO-8601 UTC. `dayWei` and `monthWei` are the caps; `spentDayWei` covers the rolling 24
 hours and `spentMonthWei` the current UTC calendar month, both across every chain, net of bonds that
@@ -155,6 +168,13 @@ nothing is in the window); `monthResetsAt` is 00:00 UTC on the 1st of next month
 
 `module` in a `groups` entry is the Group's Zodiac Reality module, or `null` until the Group's
 setup transaction has mined. The relayer reads it from the chain only (see Group modules below).
+
+`createdFunds` comes after `groups` and lists `{ "chainId": <number>, "safe": "0x..." }` for each fund this relayer
+created for its bound site whose creation is confirmed (its own creation receipt succeeded). Those are the funds
+`POST /send/safe-exec` accepts with no `POST /groups` registration, so a client reads this one list to know which
+funds the relayer pays for. They are never listed in `groups`, which stays the registered Groups that naming, the
+watcher and `/send/ens` read. A creation that is pending, failed or not sent, and another site's fund, are in neither
+list. A relayer with no bound site answers `[]`, and a client reading a relayer image without the key treats it as `[]`.
 
 ### Group modules
 
@@ -177,10 +197,10 @@ value that is not a whole number of wei stops the relayer at start. A refusal st
 and window: the event names the time the send could fit again, and further refusals before that time add nothing.
 
 - Before a send the relayer reserves `gas limit x maxFeePerGas + value`. The reservation becomes the real cost,
-  `gasUsed x effectiveGasPrice + value`, only once the receipt's block is **finalized** (25-28 round 3). Until then
+  `gasUsed x effectiveGasPrice + value`, only once the receipt's block is **finalized**. Until then
   the whole maximum stays held, with every fee-bump increase: a receipt that is not final yet can still be reorged
   out, and the same transaction can then mine again at a higher cost. See "Reservation lifecycle" below.
-- A receipt counts only when it is bound to its transaction (25-28 round 4), on every path that marks a send
+- A receipt counts only when it is bound to its transaction, on every path that marks a send
   `confirming` or settles it: on the proof endpoint, the block at the receipt's height, read with its transactions,
   lists exactly one transaction with the receipt's hash (one of the send's own), and that transaction and the
   receipt both name that block, by hash and by height; settling also needs that block on the pinned finalized
@@ -188,7 +208,7 @@ and window: the event names the time the send could fit again, and further refus
   leaves the send as it is, its whole maximum held: a `pending` send is not marked `confirming`, a `confirming`
   one is not settled. Only another block at that height (a reorg) puts a `confirming` send back to `pending`.
 - **An unresolved reservation counts against the current day and month windows, whatever time it was made**,
-  until it is settled or released (25-28 round 2). A live liability never ages out of a window: with both caps at
+  until it is settled or released. A live liability never ages out of a window: with both caps at
   1,200 wei, 1,000 reserved before midnight on the last day of a month still blocks a second 1,000 after it.
   Settled spend counts by the time the relayer saw its receipt, so a send counts in the window where it was paid.
   Ledger entries are `open` (unresolved), `settled` or `released`. When unresolved reservations alone fill a cap,
@@ -214,7 +234,7 @@ and window: the event names the time the send could fit again, and further refus
   proof that none of its broadcasts can ever mine, read on the one proof endpoint (the first RPC URL) in one pass:
   the relayer's nonce count at the `finalized` block is past the send's nonce, and the relayer's transaction with
   that nonce, found in a block from the send's first broadcast block to `finalized`, is none of the send's own
-  hashes. That block must be on the finalized chain (25-28 round 3): the finalized block's hash is pinned for the
+  hashes. That block must be on the finalized chain: the finalized block's hash is pinned for the
   pass, parent hashes are followed down from it (blocks read by hash, kept only when at the height expected, so a
   wrong answer is read again next pass; at most 256 such reads per chain per pass; a longer walk goes on in the next
   pass) and must arrive at the consuming block's hash at its height, and the
@@ -227,10 +247,10 @@ and window: the event names the time the send could fit again, and further refus
   stored; its real cost is settled once that receipt is final.
 - A `stuck` send keeps its reservation and resolves only as above, from the chain.
 - Settling, releasing, marking `confirming` and going back to `pending` on a reorg are each one database
-  transaction with the ledger change and the audit line (25-28 round 3): a crash or a failed write leaves the send
+  transaction with the ledger change and the audit line: a crash or a failed write leaves the send
   as it was, its reservation held, and the next pass does it once.
-- At start, before anything is sent: a `mined` or `replaced` row whose reservation is still open (a database from
-  before round 3 could hold one) goes back to `pending` (`send_recovered` audit line), so it settles from its receipt
+- At start, before anything is sent: a `mined` or `replaced` row whose reservation is still open (an older
+  database could hold one) goes back to `pending` (`send_recovered` audit line), so it settles from its receipt
   or is released only by the proof. Then an open reservation that **no** send row holds, in any status, is given
   back (`reservation_released` audit line): a row always comes before its broadcast, so nothing went out for it.
 - A bond counts as spend until it is reclaimed; a credit entry then offsets it. A bond whose send was
@@ -247,20 +267,19 @@ and window: the event names the time the send could fit again, and further refus
 
 One serial queue per chain hands out nonces in request order, so concurrent requests get consecutive
 nonces. A nonce held by a `pending`, `stuck` or `confirming` send is never handed out again, even when the node has
-forgotten that send (25-28 round 3). Every transaction is signed and stored in sqlite (`pending`), with its hash and its first broadcast block
+forgotten that send. Every transaction is signed and stored in sqlite (`pending`), with its hash and its first broadcast block
 (read before the nonce), before it is broadcast, so a restart always finds a send that may be live. At boot the
 relayer gives back reservations no waiting send holds, then reconciles waiting and stuck sends with the chain: a
 send whose hash the chain has mined is settled, one the node no longer holds is sent again as the identical signed
 transaction (the same hash, never a second transaction; for a stuck send, its last replacement; never on a chain
-the relayer does not sponsor), a `confirming` send found reorged waits a full bump interval from the boot head
-(25-28 round 4), and one proven
+the relayer does not sponsor), a `confirming` send found reorged waits a full bump interval from the boot head, and one proven
 replaced at the finalized block (see "Spend caps") is marked `replaced` (stored as a `send_replaced` audit line
 with the consuming hash) and its reservation given back. Anything not proven stays for the poll loop. A send not
 mined after 12 blocks is resent with the same nonce and both fees raised by one eighth (rounded up, at least 1
 wei), at most 3 times, each time within the spend cap (see "Spend caps"); after that a `send_stuck` event is
 stored (it reaches `GET /events`, with the Safe when the send was for a Group) and the send is marked `stuck`.
 
-#### Reservation lifecycle (25-28 rounds 3 and 4)
+#### Reservation lifecycle
 
 | Send status | Its reservation | Leaves this status when |
 |---|---|---|
@@ -310,7 +329,7 @@ Any hash a send has had (the first broadcast or a fee bump), in any letter case.
 - `pending`: still waiting. `stuck: true` means the fee bumps ran out and the organizers were alerted
   (`send_stuck`); it is still waiting.
 - `mined`: `minedHash`, one of `hashes`, mined. Read its receipt from the chain for the outcome (a revert also
-  mines). `finalized` (25-28 round 3) is `false` while that receipt's block is not finalized: a reorg can still put
+  mines). `finalized` is `false` while that receipt's block is not finalized: a reorg can still put
   the send back to `pending`, and the cap still holds its maximum. It is `true` once the block is finalized and the
   cap holds the real cost.
 - `not_sent`: proven at the finalized block (see "Spend caps"): the relayer's transaction `consumedBy`, in block
@@ -358,8 +377,7 @@ Request:
 
 Someone can take a Group's name between its registration and its name job (`POST /send/ens`).
 `POST /send/ens` only registers the label of the registered space, so the Group needs a new space.
-A new registration for the same Safe and another space replaces the old space when all of this holds
-(25-19 follow-up, orchestrator ruling of 2026-11-08):
+A new registration for the same Safe and another space replaces the old space when all of this holds:
 
 1. The Safe accepts the signature for the new space: the same EIP-1271 check as a first registration.
    A signature another Safe accepts is refused with `403 registration_signature_invalid`.
@@ -422,12 +440,124 @@ become a second transaction. The check runs inside the chain's send queue, so tw
 If the Safe's nonce cannot be read the answer is `502 {"error": "send_failed", "reason": "safe_nonce_unreadable",
 "broadcast": false}`.
 
+When the fee account cannot pay (D-35 to D-39; the same holds for `POST /send/reality/execute`). The answer
+`502 {"error": "send_failed", "reason": "payer_empty", "broadcast": false}` means the community's fee account cannot pay
+this send now. It is given when the balance, read before anything is reserved, is below the send's cost (the gas
+estimate with its 12/10 margin, at the highest fee per gas, the same figure the cap would reserve). The body is
+exactly these three keys and carries no balance. It is given only
+when a read-only simulation from the fee account shows the send itself would succeed: a send that would fail is 409
+`simulation_failed`, whatever the balance. A request already in the queue is never told so; it gets the queue's
+duplicate answer. `fee_estimate_failed` and `simulation_unavailable` (both 502 with `"broadcast": false`) mean the fee
+service could not check, for example the node did not answer: nothing was sent or reserved, so wait and retry. The
+balance can change between the read and the answer (a top-up lands, or another send spends it); a retry reads it again.
+A balance that cannot be read is not an empty one: the send goes on, and the node's refusal of the broadcast is the
+backstop.
+
+**The rule for the whole service: a definite "the fee account is empty" (`payer_empty`)
+is only ever given before anything is queued.** After a send is queued, a broadcast the node refuses for lack of funds
+is the retryable 502 with `"broadcast": false` and the node's own reason (`"send failed"` on fund creation): nothing
+was sent or held, wait and retry. A send of the same request that is live by then is answered as already pending
+(`202`, `"duplicate": true`) on `POST /send/reality/execute`. This holds on `POST /send/safe-exec`,
+`POST /send/reality/execute` and `POST /send/safe-create` alike.
+
 The allowlist is a list of `(chainId, target, selector)` tuples built from `config/networks.json`
 plus each registered Group's Safe. The relayer never calls Hats, an Arbitrator or `enableModule`
 itself. Those run inside owner-signed Safe transactions, so the relayer is never the sender of a
 member-role mint (D-05). Inner calls of an owner-signed Safe transaction are not restricted by
 target: the owners authorized them, and payments go to arbitrary recipients. Only delegatecall
 targets are restricted.
+
+### Sponsored fund creation (`POST /send/safe-create`, `GET /creations/:groupUuid`)
+
+A site organizer with no test ETH creates the Group's Safe while this relayer pays. The request and
+answer shapes are `test/fixtures/fund-creation-contract.json`, the same file the Drupal side tests
+against. The body names owners, threshold, salt and the predicted address, and nothing else (any
+other key is 400 `unexpected_field`). The relayer builds `Safe.setup` (no module call, no payment,
+no refund) and `createProxyWithNonce` on the chain's Safe 1.4.1 factory itself, checks the
+predicted address against its own CREATE2 result, and refuses a body that makes the paying key an
+owner. Only chains whose `config/networks.json` entry has `"fundCreation": true` and `"testnet": true`
+qualify (Ethereum Sepolia); others are 403 `network_not_supported`, and a qualifying chain with sponsoring off is
+503 `chain_not_sponsored`.
+
+One slot per (site, Group, network), for ever. This supersedes `rules.slot` of
+`test/fixtures/fund-creation-contract.json`, which stays byte-identical as the record of the first contract;
+`test/fixtures/site-enrolment-contract.json` states the current rule. An exact repeat of the slot's intent gets the slot's answer
+(`duplicate: true`) even after its envelope expired or the caps filled; any other intent is 409
+`slot_taken`. Only a `not_sent` slot sends again, and only for the same intent. `confirmed` and
+`failed` are read from the slot's queue row (its first receipt); a failed creation is never sent
+again. An attempt counts from the claim and is given back only when nothing was broadcast. A slot's predicted
+address is fixed when the slot is claimed and is never predicted again. A repeat answers the stored address whatever
+the factory or `networks.json` say later. A retry of a `not_sent` slot that holds its stored call sends that call without
+reading the factory or predicting again, as long as the network still qualifies for creation and is sponsored in
+`networks.json`, even if the factory's code or the deployment addresses have changed; otherwise the retry is refused as
+any new request would be. A slot migrated from an older database holds no stored call, so its retry reads the factory and
+checks the prediction again, as a new request does.
+
+`GET /creations/:groupUuid?chainId=<decimal>` reads the slot of one network. Without `chainId` the answer is for
+the one network marked for fund creation; with more than one marked it is 400 `chain_id_required`. A value that is
+not a whole number from 1 up to the largest safe integer is 400 `invalid_chain_id`. With `chainId` a stored slot is
+read whatever `networks.json` says now. No slot, or no bound site yet, is 404 `creation_not_found`.
+
+**Site enrolment.** After install the site calls `POST /site` once with its own UUID. The first claim wins and is
+permanent: the relayer stores the site in its database, on its volume, and no route rebinds it, unbinds it, enables
+creation or changes a limit. The same site again is 200 (`"created": false`); any other site is 409 `site_mismatch`.
+Nothing binds while creation is off (403 `creation_disabled`). A non-empty `siteUuid` in the policy file is the binding
+instead and wins over a stored one, which is then ignored with one start-up log line (no UUID in it). A reinstall that
+keeps the relayer volume stays bound to the old site, and the new site gets `site_mismatch`. Put the new site's UUID in
+the policy file and restart the relayer: that keeps the spend-limit ledger, the queue of sends in flight, bond reclaims
+and the stored records. Delete the volumes and deploy fresh only for a throwaway deployment with no sends in flight, no
+live funds and no reused sending key, because the spend-limit history goes with them. A policy file that cannot be read
+or is invalid binds the relayer to no site, not back to a stored one. Until a site is bound, creation is 403
+`site_mismatch`.
+
+**Operator policy.** `config/fund-creation.json` (or the path in
+`SPONSOR_RELAYER_FUND_CREATION_CONFIG`):
+
+```json
+{ "enabled": true, "siteUuid": "", "groups": [], "limits": { "perActorPerDay": 1, "perSitePerDay": 3 } }
+```
+
+- Exactly these keys; UUIDs in lower case. The limits are rolling 24-hour counts of funded
+  attempts, per organizer and per site, whole numbers from 1 to 1000. Past a limit the answer is
+  429 `setup_limit` with `scope` and `until` (unix seconds). The money caps still apply (429
+  `cap_reached`; in this route `until` and `monthStartsAt` are unix seconds).
+- `siteUuid` empty means the site binds itself through `POST /site`; a non-empty value is the operator's choice of
+  site. `groups` empty means every group of the bound site qualifies, whatever kind of group it is; a non-empty list is
+  an allow-list, and any other group is 403 `group_not_enrolled`.
+- The file is read once at start; restart the relayer to apply a change. No route enrols a Group, changes a limit,
+  resets a slot or rebinds the site; `POST /site` only makes the first binding.
+- A missing, unreadable or invalid file turns creation off (403 `creation_disabled`) with one log
+  line. The shipped file is on, with no site and no group list; only networks marked both `fundCreation` and
+  `testnet` qualify, so shipped-on reaches practice networks only.
+- Rollback: set `"enabled": false` and restart. Slots and their answers stay readable.
+- There is no member-paid fallback: when the relayer cannot pay, the answer is 502
+  `{"error": "send_failed", "reason": "payer_empty", "broadcast": false}`, nothing is sent and nobody is
+  asked to pay. This covers a node that says the fee wallet cannot pay, a balance of exactly zero, a balance too small
+  for the send's cost (read before anything is reserved). A broadcast the node refused for lack of funds is the
+  retryable 502 `"send failed"`, never `payer_empty` (the rule above under `POST /send/safe-exec`). Top up the
+  relayer; the same intent may then be sent again. If a fee or gas estimate could not be had (a timeout, an outage, or
+  any failure of either estimate that is not a revert of the call) the answer is 502 `fee_estimate_failed` with
+  `"broadcast": false`: nothing is sent, the attempt is given back, and the same intent may be sent again. Only a call
+  that fails by itself is 409 `simulation_failed`: on a wallet that can pay, on a dust wallet whose estimate without the
+  wallet also reverts, or when the balance cannot be read.
+
+**What bounds a token holder.** Anyone holding the relayer's token can ask for a creation for any group of the bound
+site, and `actor.uuid` is only what the site says it is. The real bounds are the permanent site binding, `perSitePerDay`,
+the money caps, one slot per (site, Group, network), and practice networks only. An empty group list is not a bound,
+and `perActorPerDay` bounds only an honest site.
+
+**A fund the relayer created.** Once the creation of a fund this relayer made for its site is confirmed (its own
+receipt succeeded), that Safe, at exactly its predicted address and on that network, counts as registered for
+`POST /send/safe-exec` with no name, so a fund that has only approvers can make sponsored sends (adding a second
+approver, for one). Every send still needs the owners' own signatures. A creation that failed, was not sent or is still
+pending never counts, and neither does another site's fund. Naming the fund is still `POST /groups` with the owners'
+signature, and `POST /send/ens` still needs that registration. Creation alone lists such a fund in `GET /status` under
+`createdFunds`, not `groups`; once it is named through `POST /groups` it is listed in both.
+
+**Who pays the fee.** The fee wallet pays. Members never pay a fee from their own wallet. When the fee wallet cannot
+pay (`payer_empty`), a cap or a quota is reached, or the site is not bound yet, nothing is sent: the action waits and
+stays retryable. What makes it possible is funding the fee wallet, the end of the cap or quota window, or the site
+enrolling.
 
 ### `POST /send/ens` and `GET /jobs/:id`
 
@@ -460,7 +590,7 @@ and, when failed, `"error"`. `status` is `pending` until the commit has mined, `
 with `"reason": "job_not_found"`. Jobs live in the `jobs` table. A job a restart interrupted is marked
 `failed` with `interrupted_by_restart` and never resumed, because a second run could pay twice: ask again.
 
-## Reality steps and bond reclaim (25-07)
+## Reality steps and bond reclaim
 
 Three steps carry out a passed payment, and anyone may call each one on the chain, so the relayer sends and pays
 for all three. Members and organizers sign nothing for them. A request names a Group and a proposal and nothing
@@ -472,7 +602,7 @@ and the transactions, the question, the answer and the bond all come from the re
 |---|---|---|
 | `POST /send/reality/add` | module `addProposal(proposalId, txHashes)` | `409 proposal_not_final` until the hub says `closed` and `final` (the relayer calls the sequencer's `GET /scores/<id>` itself first); `409 proposal_not_passed`; `400 no_transactions`; `409 already_asked` |
 | `POST /send/reality/answer` | Reality `submitAnswer(questionId, answer, 0)` with `value` = the module's `minimumBond` | `409 question_not_asked`, `409 already_answered`, `409 already_final` |
-| `POST /send/reality/execute` | module `executeProposalWithIndex(...)`, simulated first | `409 not_finalized`, `409 answer_not_yes`, `409 cooldown` (a block strictly after finalize time plus cooldown is needed), `409 already_executed` |
+| `POST /send/reality/execute` | module `executeProposalWithIndex(...)`, simulated first | `409 not_finalized`, `409 answer_not_yes`, `409 cooldown` (a block strictly after finalize time plus cooldown is needed), `409 already_executed`, `502 payer_empty` (the fee account cannot pay, D-39), `502 fee_estimate_failed` (could not check; see `POST /send/safe-exec`) |
 
 How the answer is decided (D-09, D-16, TM-79): the relayer reads the proposal from the hub itself and answers `yes`
 only when the proposal is in the Safe's registered space, is `closed` with scores `final`, the pass rule holds
@@ -498,7 +628,7 @@ bond stays counted. A step that fails is stored as an audit row in the `events` 
 it) and tried again on the next pass. A question whose history contains a commit-reveal answer is left open with an error, because the
 relayer does not claim those.
 
-## Wrong answers (25-08, D-16)
+## Wrong answers (D-16)
 
 Anyone may ask a Group's Reality module a question and answer it, so a wrong "yes" can finalize and move money long
 before a daily check runs. The relayer therefore runs a watcher every minute (`SPONSOR_RELAYER_WATCH_INTERVAL_S`,
@@ -589,6 +719,7 @@ of a vote.
 | `SPONSOR_RELAYER_SEQUENCER_URL_<chainId>` | Snapshot sequencer URL for a chain. Unset: `sequencer` in `config/networks.json` |
 | `SPONSOR_RELAYER_WATCH_INTERVAL_S` | Seconds between wrong-answer watcher passes, a whole number from 1 to 3600. Default 60. Anything else stops the relayer at start |
 | `SPONSOR_RELAYER_LOW_BALANCE_WEI` | The balance in wei under which a `low_balance` event is stored. Default `20000000000000000` (0.02 ETH). A value that is not a whole number stops the relayer at start |
+| `SPONSOR_RELAYER_FUND_CREATION_CONFIG` | Path of the fund-creation policy file. Default `config/fund-creation.json` (on; the site binds itself; practice networks only). See "Sponsored fund creation" |
 | `SPONSOR_RELAYER_PORT` | Listen port. Default 8787; the image sets 8080 |
 | `SPONSOR_RELAYER_HOST` | Listen address. Default `0.0.0.0`; publish no port outside the internal network |
 
@@ -602,7 +733,7 @@ addresses is treated as empty: that chain refuses every send.
 ## Image
 
 ```
-docker build -t gas-sponsor-relayer:p25 .
+docker build -t gas-sponsor-relayer:local .
 ```
 
 The Dockerfile builds on `node:24-alpine`, pinned by digest, as measured on 2026-11-08:
@@ -622,7 +753,7 @@ operator sets that, together with the key, only on an instance that wants sponso
 
 ## Hosting cost
 
-Measured on desktop-dev on 2026-11-08 (Docker, linux/amd64), replacing the estimate in the research
+Measured on 2026-11-08 (Docker, linux/amd64), replacing an earlier estimate
 (image about 150 MB, idle memory 60 to 120 MB):
 
 | Measure | Value |

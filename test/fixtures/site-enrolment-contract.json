@@ -1,0 +1,126 @@
+{
+  "about": "The site-enrolment and per-network creation-status contract shared by the relayer (test/fixtures) and gas_sponsor (tests/fixtures); change it in both, byte for byte; each side pins its sha256.",
+  "supersedes": {
+    "fund-creation-contract.json rules.slot": "one slot per (siteUuid, groupUuid, chainId), for ever"
+  },
+  "routes": {
+    "enrol": "POST /site",
+    "read": "GET /site",
+    "creationStatus": "GET /creations/:groupUuid with an optional decimal chainId query"
+  },
+  "request": {
+    "siteUuid": "5b0e7c1e-2f43-4a8e-9d55-0c6f6a0e9b11"
+  },
+  "otherSiteUuid": "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f",
+  "enrolResponses": {
+    "created": {
+      "status": 201,
+      "body": {
+        "siteUuid": "5b0e7c1e-2f43-4a8e-9d55-0c6f6a0e9b11",
+        "bound": true,
+        "created": true
+      }
+    },
+    "same": {
+      "status": 200,
+      "body": {
+        "siteUuid": "5b0e7c1e-2f43-4a8e-9d55-0c6f6a0e9b11",
+        "bound": true,
+        "created": false
+      }
+    },
+    "otherSite": {
+      "status": 409,
+      "body": {
+        "error": "conflict",
+        "reason": "site_mismatch"
+      }
+    },
+    "invalidBody": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "invalid_body"
+      }
+    },
+    "creationOff": {
+      "status": 403,
+      "body": {
+        "error": "forbidden",
+        "reason": "creation_disabled"
+      }
+    },
+    "notConfigured": {
+      "status": 503,
+      "body": {
+        "error": "unavailable",
+        "reason": "not_configured"
+      }
+    },
+    "web3Off": {
+      "status": 503,
+      "body": {
+        "error": "web3_disabled"
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": {
+        "error": "unauthorized"
+      }
+    },
+    "oldService": {
+      "status": 404,
+      "body": {
+        "error": "not_found"
+      }
+    }
+  },
+  "readResponses": {
+    "unbound": {
+      "status": 200,
+      "body": {
+        "bound": false
+      }
+    },
+    "bound": {
+      "status": 200,
+      "body": {
+        "bound": true,
+        "siteUuid": "5b0e7c1e-2f43-4a8e-9d55-0c6f6a0e9b11"
+      }
+    }
+  },
+  "creationStatusResponses": {
+    "chainIdRequired": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "chain_id_required"
+      }
+    },
+    "invalidChainId": {
+      "status": 400,
+      "body": {
+        "error": "bad_request",
+        "reason": "invalid_chain_id"
+      }
+    },
+    "none": {
+      "status": 404,
+      "body": {
+        "error": "not_found",
+        "reason": "creation_not_found"
+      }
+    }
+  },
+  "rules": {
+    "binding": "The first claim wins and is permanent; no route rebinds, unbinds, enables creation or changes a limit (D-05).",
+    "operatorSite": "A non-empty siteUuid in the operator's policy file is the binding; POST /site must match it; a stored binding to another site is ignored (D-20).",
+    "groups": "An empty policy groups list means every group of the bound site; a non-empty list is an allow-list and other groups get 403 group_not_enrolled (D-06, D-21).",
+    "slot": "One per siteUuid, groupUuid and chainId, for ever; supersedes rules.slot of fund-creation-contract.json (D-02).",
+    "creationStatusDefault": "Without chainId the relayer answers for the one network marked for fund creation; more than one marked gives 400 chain_id_required.",
+    "outsideSend": "Enrolment is outside /send/, so no enrolment answer is a send outcome (TM-284).",
+    "policyOff": "POST /site answers 403 creation_disabled while the operator's policy is off and binds nothing."
+  }
+}

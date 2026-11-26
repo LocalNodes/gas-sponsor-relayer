@@ -1,4 +1,4 @@
-// Web3 off means keyless (orchestrator ruling 2026-11-07, TM-151): unless WEB3_ENABLED is exactly
+// Web3 off means keyless (TM-151): unless WEB3_ENABLED is exactly
 // 'true' no key is loaded and every route but GET /healthz answers 503 web3_disabled.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -105,16 +105,22 @@ describe('web3-disabled', () => {
   test('web3-disabled: the route table matches what the server dispatches', async () => {
     assert.deepEqual(
       [...ROUTES].sort(),
-      ['GET /events', 'GET /healthz', 'GET /jobs/:id', 'GET /ops/recheck', 'GET /sends/:hash', 'GET /status', 'POST /groups', 'POST /ops/recheck', 'POST /send/ens', 'POST /send/reality/add', 'POST /send/reality/answer', 'POST /send/reality/execute', 'POST /send/safe-exec'],
+      ['GET /creations/:groupUuid', 'GET /events', 'GET /healthz', 'GET /jobs/:id', 'GET /ops/recheck', 'GET /sends/:hash', 'GET /site', 'GET /status', 'POST /groups', 'POST /ops/recheck', 'POST /send/ens', 'POST /send/reality/add', 'POST /send/reality/answer', 'POST /send/reality/execute', 'POST /send/safe-create', 'POST /send/safe-exec', 'POST /site'],
     );
     const s = await startStub();
     try {
       for (const entry of ROUTES) {
         const [method, path] = entry.split(' ');
         // A parameter route is hit with a well-formed id; an unknown job is a 404 that says so.
-        const res = await s.call(method, path.replace(':id', '0'.repeat(32)).replace(':hash', `0x${'0'.repeat(64)}`), method === 'POST' ? {} : undefined);
+        const res = await s.call(method, path.replace(':id', '0'.repeat(32)).replace(':hash', `0x${'0'.repeat(64)}`).replace(':groupUuid', '00000000-0000-4000-8000-000000000000'), method === 'POST' ? {} : undefined);
         if (entry === 'GET /jobs/:id') {
           assert.equal(res.json.reason, 'job_not_found');
+          continue;
+        }
+        if (entry === 'GET /creations/:groupUuid') {
+          // No slot for an unknown Group: a plain 404 from the route itself, not the web3-off 503.
+          assert.equal(res.status, 404);
+          assert.equal(res.json.error, 'not_found');
           continue;
         }
         if (entry === 'GET /sends/:hash') {

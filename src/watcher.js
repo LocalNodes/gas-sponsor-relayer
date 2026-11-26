@@ -17,7 +17,7 @@
 //      question the watcher had flagged that ended right is a resolved event.
 //
 // A hub outage never causes a challenge: when decide() cannot read the hub the question is left for the next tick.
-// The bond of a challenge goes to the reclaim loop (25-07) through the reality_questions table.
+// The bond of a challenge goes to the reclaim loop through the reality_questions table.
 import { encodeFunctionData, parseAbi, parseAbiItem } from 'viem';
 import { build } from './allowlist.js';
 import { chainIsConfigured } from './config.js';
@@ -229,9 +229,9 @@ export function createWatcher({
       if (attempts + 1 >= MAX_CHALLENGE_ATTEMPTS) escalate(q, { ...info, reason: 'challenge_failed', extra: { attempts: attempts + 1 } }, actions);
       return;
     }
-    // The challenge is out (25-28 dedupe, round-2 Q6). First the mark that makes the next pass wait for its receipt
+    // The challenge is out. First the mark that makes the next pass wait for its receipt
     // instead of challenging again; then the bookkeeping, each step logged when it fails and never thrown, as the
-    // send routes do after a broadcast (25-28 round 2, MEDIUM 5).
+    // send routes do after a broadcast.
     const after = (what, fn) => {
       try {
         fn();
@@ -240,7 +240,7 @@ export function createWatcher({
       }
     };
     after('marking it in flight', () => db.updateWatched(q.chainId, q.questionId, { flagged: true, challengedBond: bondKey, challengeNonce: sent.nonce, challengeAttempts: attempts + 1 }));
-    // Reclaim (25-07) works from this row. The history it rebuilds starts at the block the question was asked in,
+    // Reclaim works from this row. The history it rebuilds starts at the block the question was asked in,
     // so the attacker's answer, which came after, is in it.
     after('storing its bond for reclaim', () => db.insertQuestion({ chainId: q.chainId, questionId: q.questionId, module: q.module, safe: q.safe, proposalId: q.proposalId, answer: decision.answer, bondWei: next, bondRef, fromBlock: q.createdBlock, txHash: sent.hash }));
     after('the answer_challenged event', () => feed.add('answer_challenged', {

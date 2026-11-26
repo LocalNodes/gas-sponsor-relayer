@@ -1,4 +1,4 @@
-// Cap reserve, serial queue and spend recording, end to end on the Sepolia fork (25-05, D-19).
+// Cap reserve, serial queue and spend recording, end to end on the Sepolia fork (D-19).
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getAddress, parseEther, zeroAddress } from 'viem';
@@ -87,7 +87,7 @@ describe('queue (fork)', () => {
     const receipts = await Promise.all([r1, r2].map((r) => pub.waitForTransactionReceipt({ hash: r.json.hash })));
     for (const rc of receipts) assert.equal(rc.status, 'success');
 
-    // The cap settles a receipt once its block is finalized (25-28 round 3, #2).
+    // The cap settles a receipt once its block is finalized.
     await settleSends(pub, relayer);
     const expected = receipts.reduce((sum, rc) => sum + rc.gasUsed * rc.effectiveGasPrice, 0n);
     const status = await relayer.call('GET', '/status');
@@ -136,7 +136,7 @@ describe('queue (fork)', () => {
       assert.equal(receipt.status, 'success');
       assert.equal((await pub.getTransaction({ hash: row.hash })).nonce, original.nonce);
       assert.equal(await pub.getBalance({ address: payee }), parseEther('0.001'));
-      // A receipt settles only once its block is finalized (25-28 round 3, #2); anvil's finalized tag trails latest.
+      // A receipt settles only once its block is finalized; anvil's finalized tag trails latest.
       await untilFinalized(pub, receipt.blockNumber);
       await relayer.queue.tick();
       assert.equal(relayer.db.listPending().find((p) => p.hash === row.hash).status, 'mined');

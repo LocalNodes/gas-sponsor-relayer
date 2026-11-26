@@ -1,4 +1,4 @@
-// 25-28 round 3, #5 (Codex round 3 MEDIUM 5): a stuck send keeps its nonce, and a waiter only ever accepts a receipt
+// A stuck send keeps its nonce, and a waiter only ever accepts a receipt
 // of its own send.
 // - Nonce allocation counted only `pending` rows. A stuck send the node had forgotten gave its nonce to the next
 //   request, so two different sends, A and B, both held nonce 5.
@@ -16,8 +16,8 @@ const B = `0x${'b2'.repeat(32)}`;
 /** A send row stored as the queue stores one, at `nonce`, with its one hash. */
 const row = (db, hash, nonce, o = {}) => db.insertPending({ chainId: CHAIN, nonce, hash, to: ME, data: '0x', value: 0n, gas: 100n, maxFeePerGas: 10n, maxPriorityFeePerGas: 1n, sentBlock: 100n, kind: 'send', ...o });
 
-describe('round 3 #5: a stuck send keeps its nonce', () => {
-  test('nonce-binding: Codex repro: a stuck send the node forgot keeps nonce 5; the next send gets 6, not 5', async () => {
+describe('a stuck send keeps its nonce', () => {
+  test('nonce-binding: repro: a stuck send the node forgot keeps nonce 5; the next send gets 6, not 5', async () => {
     const { db, node, queue } = setup();
     const first = await queue.enqueue(CHAIN, () => tx(), {});
     assert.equal(first.nonce, 5);
@@ -34,8 +34,8 @@ describe('round 3 #5: a stuck send keeps its nonce', () => {
   });
 });
 
-describe('round 3 #5: a waiter accepts only its own send\'s receipt', () => {
-  test('nonce-binding: Codex repro: sends A and B both at nonce 5, B mined: waitMined(A) never returns B\'s receipt', async () => {
+describe('a waiter accepts only its own send\'s receipt', () => {
+  test('nonce-binding: repro: sends A and B both at nonce 5, B mined: waitMined(A) never returns B\'s receipt', async () => {
     const { db, cap, node, queue } = setup();
     row(db, A, 5);
     row(db, B, 5); // the newer row at this nonce

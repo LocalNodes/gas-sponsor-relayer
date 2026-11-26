@@ -78,7 +78,7 @@ export async function verifyRegistration({ publicClient, relayer, community, cha
  * - Another space: the new space replaces the old one in the Safe's one row ({outcome: 'replaced',
  *   replaced: <old space>}), but only while no name job for the old space has started registering
  *   (nameJobStarted). Otherwise nothing changes ({outcome: 'refused'}). The case it serves: the name was
- *   taken between registration and name reservation (25-19 follow-up, ruling 2026-11-08).
+ *   taken between registration and name reservation.
  */
 export function storeRegistration(db, { chainId, safe, space, community }) {
   return db.atomically(() => {

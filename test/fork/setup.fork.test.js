@@ -1,7 +1,7 @@
 // One owner-signed, relayer-sent Safe transaction builds a Group's governance on a Sepolia fork, and
 // the Safe is the owner of every part of it from the first block (D-07, D-13, D-17, Ostrom 7).
 // The batch bytes come from test/fixtures/vectors/setup-batch.json, the same file the PHP SetupPlanner
-// test (25-16) compares against. That file holds a 0xfe stand-in where the batch has Reality.eth's
+// test compares against. That file holds a 0xfe stand-in where the batch has Reality.eth's
 // Arbitrator creation code (GPL-3.0-only, so not in this repository). The real vector is loaded from
 // test/fixtures/private/setup-batch.real.json (or the path in LN_SETUP_BATCH_REAL) when it is there;
 // without it, the two tests that need the real code are skipped. See test/fixtures/vectors/README.md.

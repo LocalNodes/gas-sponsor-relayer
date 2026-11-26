@@ -1,4 +1,4 @@
-// Relayer-paid ENSv2 registration with the Safe as owner (25-06, D-08, TM-76, TM-78).
+// Relayer-paid ENSv2 registration with the Safe as owner (D-08, TM-76, TM-78).
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -209,7 +209,7 @@ describe('ens job', () => {
     assert.ok(!JSON.stringify(job.body).includes(secret), 'the commit secret is not in the job answer');
   });
 
-  test('ens: recording a send fails after its broadcast: the job goes on and keeps the hash (25-28 round 2, MEDIUM 5)', async () => {
+  test('ens: recording a send fails after its broadcast: the job goes on and keeps the hash', async () => {
     const { db, ens, chain } = setup();
     db.recordSend = () => { throw new Error('disk full'); };
     const res = await ens.request(body());
@@ -287,7 +287,7 @@ describe('ens job', () => {
     assert.deepEqual(chain.state.sent.map(selectorOf), [SELECTORS.mint, SELECTORS.approve, SELECTORS.commit]);
   });
 
-  test('ens: round 3 #5, Codex repro: another send at the same nonce mined; the job never takes its receipt for its own step', async () => {
+  test('ens: repro: another send at the same nonce mined; the job never takes its receipt for its own step', async () => {
     const db = openDb(':memory:');
     db.addGroup({ chainId: CHAIN, safe: SAFE, space: 'gov-vectors.eth', community: COMMUNITY });
     const cap = createCap({ db, caps: { dayWei: 10n ** 18n, monthWei: 10n ** 19n }, now: () => 1_700_000_000_000 });

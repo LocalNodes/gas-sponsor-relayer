@@ -45,7 +45,7 @@ export const DELEGATECALL_TARGET_KEYS = Object.freeze(['multiSend', 'multiSendCa
 // Static rows: networks.json key -> selectors the relayer may send to that address.
 // Hats, Arbitrator and enableModule never appear here (D-05, no-direct-hats test).
 // The Zodiac module's own calls (addProposal, executeProposalWithIndex) are added per Group by
-// build()'s `modules` argument, and only for modules groups.js found on the chain (25-06, TM-77);
+// build()'s `modules` argument, and only for modules groups.js found on the chain (TM-77);
 // deployModule runs inside the owners' Safe batch, never from here.
 const STATIC_ROWS = Object.freeze({
   reality: ['submitAnswer', 'claimWinnings', 'withdraw', 'createTemplate'],
@@ -53,7 +53,7 @@ const STATIC_ROWS = Object.freeze({
   ensPaymentToken: ['approve', 'mint'],
 });
 
-// Selectors the relayer may send to a Group's own Reality module (25-07 uses them).
+// Selectors the relayer may send to a Group's own Reality module (bond reclaim uses them).
 const MODULE_ROWS = Object.freeze(['addProposal', 'executeProposalWithIndex']);
 
 const lower = (a) => String(a).toLowerCase();
@@ -114,6 +114,41 @@ export function build(networks, groups = [], modules = []) {
           return { ok: false, reason: 'delegatecall_target_not_allowed' };
         }
       }
+      return { ok: true };
+    },
+  };
+}
+
+// Sponsored fund creation (POST /send/safe-create only). Kept apart from SELECTORS on purpose: build() never adds a
+// factory tuple, so /send/safe-exec, the pipeline and every other route refuse the factory. `setup` is never sent: it
+// is the initializer the relayer encodes inside createProxyWithNonce.
+export const CREATION_SIGNATURES = Object.freeze({
+  createProxyWithNonce: 'createProxyWithNonce(address,bytes,uint256)',
+  setup: 'setup(address[],uint256,address,bytes,address,address,uint256,address)',
+});
+export const CREATION_SELECTORS = Object.freeze({
+  createProxyWithNonce: '0x1688f0b9', // createProxyWithNonce(address,bytes,uint256)  (SafeProxyFactory 1.4.1)
+  setup: '0xb63e800d', // setup(address[],uint256,address,bytes,address,address,uint256,address)  (Safe 1.4.1, initializer only)
+});
+
+/**
+ * The one creation call the relayer may send on a chain: createProxyWithNonce on that chain's Safe 1.4.1 factory, and
+ * only on a chain whose networks.json entry says `"fundCreation": true` and is sponsored. Returns {ok} or {ok, reason}.
+ */
+export function buildCreation(networks) {
+  const factories = new Map();
+  for (const [id, entry] of Object.entries(networks ?? {})) {
+    if (entry?.fundCreation !== true || entry.sponsoring === false) continue;
+    if (entry?.testnet !== true) continue; // D-07: a network not flagged testnet never gets a creation entry
+    if (typeof entry.safeProxyFactory !== 'string' || entry.safeProxyFactory === '') continue;
+    factories.set(Number(id), lower(entry.safeProxyFactory));
+  }
+  return {
+    check(chainId, target, selector) {
+      const factory = factories.get(Number(chainId));
+      if (!factory) return { ok: false, reason: 'network_not_supported' };
+      if (lower(target) !== factory) return { ok: false, reason: 'target_not_allowed' };
+      if (lower(selector) !== CREATION_SELECTORS.createProxyWithNonce) return { ok: false, reason: 'selector_not_allowed' };
       return { ok: true };
     },
   };

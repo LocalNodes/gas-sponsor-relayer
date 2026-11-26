@@ -1,5 +1,5 @@
-// 25-28 round 3, #4 (Codex round 3 HIGH 4, ruling (b)): Base Sepolia's L1 data fee and operator fee are outside the
-// spend cap, so the relayer does not sponsor sends on chain 84532 until Phase 30 counts the total OP-stack fee.
+// Base Sepolia's L1 data fee and operator fee are outside the
+// spend cap, so the relayer does not sponsor sends on chain 84532 until the spend cap counts the total OP-stack fee.
 // A send there is refused with 503 {"error": "unavailable", "reason": "chain_not_sponsored"} before any reservation,
 // gas estimate or broadcast: nothing is sent. Reads and GET /status for 84532 stay.
 import { describe, test } from 'node:test';
@@ -29,7 +29,7 @@ function offChain() {
   return ctx;
 }
 
-describe('round 3 #4: no sponsoring on Base Sepolia', () => {
+describe('no sponsoring on Base Sepolia', () => {
   test('not-sponsored: config/networks.json turns sponsoring off for 84532 only; chain.js marks its clients', () => {
     assert.equal(networks['84532'].sponsoring, false);
     assert.equal(chainIsSponsored(networks, 84532), false);

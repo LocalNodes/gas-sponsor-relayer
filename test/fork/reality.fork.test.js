@@ -1,6 +1,6 @@
 // A passed payment carried out on a fork: add, answer, wait, execute, every step sent and paid by the relayer
 // against a canned hub (GOV-02, GOV-04, UX-01). Members and organizers sign nothing here after the Group exists.
-// FORK_NETWORK picks the fork (ethereum_sepolia by default); 25-26 runs the same flow on Base Sepolia.
+// FORK_NETWORK picks the fork (ethereum_sepolia by default); FORK_NETWORK=base_sepolia runs the same flow on Base Sepolia.
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';

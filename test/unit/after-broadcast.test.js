@@ -1,4 +1,4 @@
-// 25-28 fix round 2, MEDIUM 5 (Codex round 2): once a send is broadcast, the caller always gets 202 with its hash.
+// Once a send is broadcast, the caller always gets 202 with its hash.
 // A failure in the bookkeeping after the broadcast (recording the send, storing the Reality question) is logged and
 // never turned into a 500 or a 502 without the hash, which would invite a retry and a second sponsored transaction.
 import { describe, test } from 'node:test';
@@ -42,7 +42,7 @@ function reality({ asked }) {
   return { ...ctx, service };
 }
 
-describe('round 2 MEDIUM 5: after a broadcast, 202 with the hash', () => {
+describe('after a broadcast, 202 with the hash', () => {
   test('after-broadcast: POST /send/safe-exec: recording the send fails after the broadcast: 202 with the hash, reservation held', async () => {
     const s = await startStub({ groups: [{ chainId: CHAIN, safe: SAFE, space: 'a.eth' }] });
     try {

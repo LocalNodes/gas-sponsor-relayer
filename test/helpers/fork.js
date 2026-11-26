@@ -25,8 +25,8 @@ import { createQueue } from '../../src/queue.js';
 import { createGroupModules } from '../../src/groups.js';
 import { createEns } from '../../src/sends/ens.js';
 
-// The fork this run talks to. FORK_NETWORK picks it (default ethereum_sepolia); 25-26 runs the same
-// tests with FORK_NETWORK=base_sepolia against a Base Sepolia fork. Ports are the ones in tests/e2e/fork/forks.json.
+// The fork this run talks to. FORK_NETWORK picks it (default ethereum_sepolia); the same
+// tests run with FORK_NETWORK=base_sepolia against a Base Sepolia fork. Ports are the ones in tests/e2e/fork/forks.json.
 const FORKS = { ethereum_sepolia: { chainId: 11155111, port: 18545 }, base_sepolia: { chainId: 84532, port: 18546 } };
 export const FORK_NETWORK = process.env.FORK_NETWORK ?? 'ethereum_sepolia';
 if (!FORKS[FORK_NETWORK]) throw new Error(`FORK_NETWORK must be ethereum_sepolia or base_sepolia, got ${JSON.stringify(FORK_NETWORK)}`);
@@ -36,7 +36,7 @@ export const TOKEN = 'test-bearer-token-not-a-secret';
 export const COMMUNITY = 'Gov Vectors';
 
 // Safe 1.4.1 set-up contracts, the same rows as tests/governance/lib/governance.mjs (safe-deployments v1.4.1).
-// They live in the test only: the relayer never deploys a Safe.
+// The relayer's own copies are in config/networks.json (fund creation, sends/safeCreate.js); these deploy test Safes.
 const SAFE = {
   singletonL2: '0x29fcB43b46531BcA003ddC8FCB67FFE91900C762',
   proxyFactory: '0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67',
@@ -69,7 +69,8 @@ export async function forkClients() {
     const id = await pub.getChainId();
     if (id !== CHAIN_ID) throw new Error(`chain id ${id}`);
     const meta = await pub.request({ method: 'anvil_metadata', params: [] });
-    if (!meta?.forkedNetwork) throw new Error('anvil is not forking');
+    // The switch accepts a local, non-forking anvil (fund-creation tests need no forked state; D-22).
+    if (!meta?.forkedNetwork && process.env.FORK_ALLOW_LOCAL !== '1') throw new Error('anvil is not forking');
   } catch (e) {
     throw new Error(`fork not reachable at ${forkUrl()}: ${e.shortMessage ?? e.message}`);
   }
@@ -79,7 +80,7 @@ export async function forkClients() {
 
 /**
  * Mine until the node's `finalized` block reaches `block` (anvil's finalized tag trails latest). The relayer settles a
- * receipt in its spend cap only once the receipt's block is finalized (25-28 round 3, #2).
+ * receipt in its spend cap only once the receipt's block is finalized.
  */
 export async function untilFinalized(pub, block, rounds = 40) {
   for (let i = 0; i < rounds; i += 1) {
@@ -205,7 +206,7 @@ export async function startRelayer(overrides = {}, options = {}) {
     },
   });
   const ens = createEns({ db, config, networks, chains, cap, queue, logger, wait: options.ensWait, pollMs: 100 });
-  const server = createServer({ config, networks, db, chains, cap, queue, groupModules, ens, logger });
+  const server = createServer({ config, networks, db, chains, cap, queue, groupModules, ens, logger, ...(options.creationPolicy ? { creationPolicy: options.creationPolicy } : {}) });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
   const call = async (method, path, body, token = TOKEN) => {

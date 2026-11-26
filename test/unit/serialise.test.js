@@ -1,12 +1,12 @@
-// 25-28 fix round 2, HIGH 2 (Codex round 2): the first broadcast and every replacement of one send run one at a
+// The first broadcast and every replacement of one send run one at a
 // time. While a broadcast's answer is outstanding nothing else is sent for that row, and an older broadcast's answer
 // can never delete or overwrite newer state of the row.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CHAIN, flush, hashOf, inBlock, receipt, refusal, settle, setup, spentDay, tx } from '../helpers/node.js';
 
-describe('round 2 HIGH 2: one broadcast at a time per send', () => {
-  test('serialise: Codex repro: while the first answer is delayed, 12 blocks pass and the poll loop runs: no fee bump is sent', async () => {
+describe('one broadcast at a time per send', () => {
+  test('serialise: repro: while the first answer is delayed, 12 blocks pass and the poll loop runs: no fee bump is sent', async () => {
     const { db, cap, node, queue } = setup({ node: { defer: true } });
     const reservation = cap.reserve(CHAIN, 1000n);
     const job = settle(queue.enqueue(CHAIN, () => tx(), { reservation }));
@@ -29,7 +29,7 @@ describe('round 2 HIGH 2: one broadcast at a time per send', () => {
     assert.equal(node.state.sent.length, 0);
   });
 
-  test('serialise: Codex repro: a replacement accepted while the original\'s answer was delayed survives the original\'s refusal, with the row and the reservation', async () => {
+  test('serialise: repro: a replacement accepted while the original\'s answer was delayed survives the original\'s refusal, with the row and the reservation', async () => {
     const { db, cap, node, queue } = setup({ node: { defer: true } });
     const reservation = cap.reserve(CHAIN, 1200n);
     const job = settle(queue.enqueue(CHAIN, () => tx(), { reservation }));

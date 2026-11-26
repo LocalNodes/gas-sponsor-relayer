@@ -1,5 +1,5 @@
 // POST /send/ens and GET /jobs/:id: a <label>.eth name registered through the ENSv2 registrar, paid by
-// the relayer, owned by the Group's Safe from the register call (D-08, RESEARCH Pattern 2, TM-76).
+// the relayer, owned by the Group's Safe from the register call (D-08, TM-76).
 //
 // The job runs: mint the payment token (only on networks flagged testnet), approve the registrar,
 // commit, wait until the chain's clock is MIN_COMMITMENT_AGE + 1 s past the commit block, register with
@@ -91,7 +91,7 @@ const FAILED_BEFORE_REGISTER_SEND = new Set([
  * registered), and so has one that failed at or after the register send, or at a point not known
  * (internal, interrupted_by_restart): its register transaction may still be mined. Only a job that
  * failed before the register send has not. While any job for a Safe's space has started, the space
- * cannot be replaced (POST /groups, 25-19 follow-up).
+ * cannot be replaced (POST /groups).
  */
 export function nameJobStarted(job) {
   if (job.status !== 'failed') return true;
@@ -194,7 +194,7 @@ export function createEns({ db, config, networks, chains, cap, queue, logger = c
       cap.release(reservation);
       throw fail(`${name}:send_failed`);
     }
-    // The send is out: a bookkeeping failure is logged and the job goes on with the hash (25-28 round 2, MEDIUM 5).
+    // The send is out: a bookkeeping failure is logged and the job goes on with the hash.
     try {
       db.recordSend({ chainId: job.chainId, safe: job.safe, kind: `ens-${name}`, txHash: sent.hash });
     } catch (e) {
@@ -320,7 +320,7 @@ export function createEns({ db, config, networks, chains, cap, queue, logger = c
       if (!chainIsConfigured(networks, chainId)) return refuse(403, 'unknown_chain');
       const net = networks[String(chainId)];
       if (!net.ensRegistrar || !net.ensPaymentToken) return refuse(403, 'no_ens_on_network', { detail: 'no ENS on this network' });
-      // Before the job and any send (25-28 round 3, #4): the relayer does not pay for sends on this chain.
+      // Before the job and any send: the relayer does not pay for sends on this chain.
       if (!chainIsSponsored(networks, chainId)) return { status: 503, body: { ...NOT_SPONSORED } };
       if (!isRegistered(db, chainId, safe)) return refuse(403, 'safe_not_registered');
       if (db.getGroup(chainId, safe).space !== `${label}.eth`) return refuse(403, 'label_not_space');

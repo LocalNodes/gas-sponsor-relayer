@@ -1,4 +1,4 @@
-# gas-sponsor-relayer image (25-05, D-01). One container per instance, one sqlite volume at /data.
+# gas-sponsor-relayer image (D-01). One container per instance, one sqlite volume at /data.
 #
 # Base: node:24-alpine, pinned by the digest of the multi-platform index (resolved with
 # `docker buildx imagetools inspect node:24-alpine`; tag and digest are recorded in README.md).

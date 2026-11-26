@@ -1,4 +1,4 @@
-// 25-28 fix round 2, HIGH 1 (Codex round 2): the raw broadcast goes to one endpoint, once, and only the node's own
+// The raw broadcast goes to one endpoint, once, and only the node's own
 // exact refusal from that one attempt counts as "nothing went out". Everything else, including an error this file
 // does not recognise, means the send may be live: its row and its reservation are kept.
 import { afterEach, describe, test } from 'node:test';
@@ -25,7 +25,7 @@ const A = 'http://a.rpc.invalid/';
 const B = 'http://b.rpc.invalid/';
 const NETWORKS = { [String(CHAIN)]: { name: 'test', rpcUrls: [A, B], multiSend: '0x38869bf66a61cF6bDB996A6aE40D5853Fd43B526' } };
 
-describe('round 2 HIGH 1: what a failed broadcast means', () => {
+describe('what a failed broadcast means', () => {
   test('broadcast: only the node\'s own JSON-RPC refusal in exact known words counts as refused; anything else is uncertain', () => {
     const refused = [
       refusal('insufficient funds for gas * price + value: balance 0, tx cost 1200, overshot 1200'),
@@ -56,6 +56,37 @@ describe('round 2 HIGH 1: what a failed broadcast means', () => {
     assert.equal(broadcastOutcome(refusal('already known')), 'accepted');
   });
 
+  // D-15: anvil answers a sender that cannot pay with -32003 (TransactionRejectedRpcError), not -32000. Exactly that
+  // code with exactly that leading text is a refusal; any other -32003 answer may have left a live send.
+  test('broadcast D-15: a -32003 insufficient-funds refusal is refused, also as the cause of another error', () => {
+    const cases = [
+      refusal('Insufficient funds for gas * price + value', -32003),
+      refusal('insufficient funds for gas * price + value: balance 0, tx cost 1200, overshot 1200', -32003),
+      refusal('  INSUFFICIENT FUNDS FOR GAS * PRICE + VALUE', -32003),
+      new RpcRequestError({ body: {}, error: { code: -32003, message: 'Insufficient funds for gas * price + value' }, url: A }),
+    ];
+    for (const e of cases) {
+      assert.equal(broadcastOutcome(e), 'refused', e.details ?? e.message);
+      assert.equal(broadcastOutcome(Object.assign(new Error('the send failed'), { cause: e })), 'refused', `wrapped: ${e.details ?? e.message}`);
+    }
+  });
+
+  test('broadcast D-15: any other -32003 answer stays uncertain, and the existing classes do not move', () => {
+    const uncertain = [
+      refusal('execution reverted', -32003),
+      refusal('nonce too low', -32003),
+      refusal('the account has insufficient funds for gas * price + value', -32003),
+      refusal('', -32003),
+      refusal('Insufficient funds for gas * price + value', -32002),
+      Object.assign(new Error('RPC Request failed.'), { name: 'RpcRequestError', details: 'Insufficient funds for gas * price + value' }),
+    ];
+    for (const e of uncertain) assert.equal(broadcastOutcome(e), 'uncertain', `${e.name}: ${e.details ?? e.message}`);
+    // The -32000 words that were refusals still are, and an unrecognised -32000 answer still is not.
+    assert.equal(broadcastOutcome(refusal('insufficient funds for gas * price + value: balance 0')), 'refused');
+    assert.equal(broadcastOutcome(refusal('nonce too low: next nonce 6, tx nonce 5')), 'uncertain');
+    assert.equal(broadcastOutcome(refusal('already known', -32003)), 'accepted');
+  });
+
   test('broadcast: an error the queue does not recognise keeps the row and the reservation, and the send is answered as sent', async () => {
     for (const e of [new Error('boom'), new ResponseBodyTooLargeError({ maxSize: 1, size: 2 })]) {
       const { db, cap, node, queue } = setup({ node: { refuse: e } });
@@ -78,7 +109,7 @@ describe('round 2 HIGH 1: what a failed broadcast means', () => {
   });
 });
 
-describe('round 2 HIGH 1: the broadcast has one endpoint and no fallback', () => {
+describe('the broadcast has one endpoint and no fallback', () => {
   const realFetch = globalThis.fetch;
   afterEach(() => { globalThis.fetch = realFetch; });
 
@@ -105,7 +136,7 @@ describe('round 2 HIGH 1: the broadcast has one endpoint and no fallback', () =>
     assert.match(String(err.details ?? err.message), /insufficient funds/, 'only B\'s refusal reaches the caller');
   });
 
-  test('broadcast: Codex repro: endpoint A takes the send and its answer is lost, B would refuse: the row and the reservation stay, and B never sees the send', async () => {
+  test('broadcast: repro: endpoint A takes the send and its answer is lost, B would refuse: the row and the reservation stay, and B never sees the send', async () => {
     const seen = { [A]: [], [B]: [] };
     globalThis.fetch = async (url, init) => {
       const body = JSON.parse(init.body);

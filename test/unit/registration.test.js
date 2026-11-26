@@ -6,7 +6,7 @@ import { COMMUNITY, SAFE, SIG65, startStub } from '../helpers/stub.js';
 
 const vector = JSON.parse(readFileSync(new URL('../fixtures/vectors/registration.json', import.meta.url), 'utf8'));
 
-test('registration digest equals the fresh3 vector (25-02)', () => {
+test('registration digest equals the fresh3 vector', () => {
   const m = vector.message;
   const digest = registrationDigest({ chainId: m.chainId, relayer: m.relayer, safe: m.safe, space: m.space, community: m.community });
   assert.equal(digest, vector.digest);
@@ -23,8 +23,8 @@ test('registration digest changes with the space, the community, the relayer and
 });
 
 // Drupal builds the SponsorRegistration message the Group's owners sign, so it must use the community
-// value this relayer checks against (25-18 ruling 2). GET /status is the one place it reads it from.
-test('GET /status reports the community the registration check uses (25-18)', async () => {
+// value this relayer checks against. GET /status is the one place it reads it from.
+test('GET /status reports the community the registration check uses', async () => {
   const s = await startStub({});
   try {
     const status = await s.call('GET', '/status');
@@ -38,7 +38,7 @@ test('GET /status reports the community the registration check uses (25-18)', as
   }
 });
 
-test('GET /status reports an empty community when SPONSOR_RELAYER_COMMUNITY is unset (25-18)', async () => {
+test('GET /status reports an empty community when SPONSOR_RELAYER_COMMUNITY is unset', async () => {
   const s = await startStub({ env: { SPONSOR_RELAYER_COMMUNITY: undefined } });
   try {
     const status = await s.call('GET', '/status');
