@@ -601,15 +601,28 @@ and the transactions, the question, the answer and the bond all come from the re
 | Endpoint | Sends | Refuses |
 |---|---|---|
 | `POST /send/reality/add` | module `addProposal(proposalId, txHashes)` | `409 proposal_not_final` until the hub says `closed` and `final` (the relayer calls the sequencer's `GET /scores/<id>` itself first); `409 proposal_not_passed`; `400 no_transactions`; `409 already_asked` |
-| `POST /send/reality/answer` | Reality `submitAnswer(questionId, answer, 0)` with `value` = the module's `minimumBond` | `409 question_not_asked`, `409 already_answered`, `409 already_final` |
-| `POST /send/reality/execute` | module `executeProposalWithIndex(...)`, simulated first | `409 not_finalized`, `409 answer_not_yes`, `409 cooldown` (a block strictly after finalize time plus cooldown is needed), `409 already_executed`, `502 payer_empty` (the fee account cannot pay, D-39), `502 fee_estimate_failed` (could not check; see `POST /send/safe-exec`) |
+| `POST /send/reality/answer` | Reality `submitAnswer(questionId, answer, 0)` with `value` = the module's `minimumBond` | `409 question_not_asked`, `409 already_answered`, `409 already_final`, `409 proposal_not_final` (asked after the vote ended, count not final yet), `409 question_time_unknown`, `409 resolution_time_unknown` (see below) |
+| `POST /send/reality/execute` | module `executeProposalWithIndex(...)`, simulated first | `409 not_finalized`, `409 answer_not_yes`, `409 asked_before_resolution` (Reality says yes, but the question was asked before the vote ended), `409 question_time_unknown`, `409 resolution_time_unknown`, `409 cooldown` (a block strictly after finalize time plus cooldown is needed), `409 already_executed`, `502 payer_empty` (the fee account cannot pay, D-39), `502 fee_estimate_failed` (could not check; see `POST /send/safe-exec`) |
 
 How the answer is decided (D-09, D-16, TM-79): the relayer reads the proposal from the hub itself and answers `yes`
 only when the proposal is in the Safe's registered space, is `closed` with scores `final`, the pass rule holds
 (scores_total at least the quorum and For above Against, Abstain counting toward the quorum), at least three scores
 are present (every proposal Drupal creates is a basic vote with three choices), and the hash of the transactions in
-the proposal's `safeSnap` plugin for this module equals the question's hash. A proposal that is not final yet gets
-`invalid`; every other case gets `no`. The answer is never taken from a request.
+the proposal's `safeSnap` plugin for this module equals the question's hash, and the question was asked at or after
+the end of the vote. A question asked before the vote ended gets `invalid`, and keeps it after the vote closes,
+whatever the result: the module's question says so. Every other case gets `no`. The answer is never taken from a
+request.
+
+The two times: the question's is the `created` time Reality writes into its `LogNewQuestion` (the timestamp of the
+block it was asked in), and the vote's end is the hub's `end`. The watcher stores the question's time when it finds the
+question, and an endpoint stores the time it finds for a question the watcher has not stored yet (it looks near the head
+of the chain, the last 2,400 blocks). A stored time is used as it is only once the question's log was read at its block
+after that block was final. Until then the chain may still put the question in another block with another time, so the
+log is read again each time it is needed, at the stored block and, when it is not there, in the blocks after it; a
+finalized block that cannot be read counts as not final. Nothing is answered, challenged or executed on a
+guess: when the question's log is not found the answer is `409 question_time_unknown`, when the hub gives no end
+`409 resolution_time_unknown`, and a question asked after the end whose count is not final yet is
+`409 proposal_not_final`. A chain read that fails is `502 read_failed` with `"broadcast": false`.
 
 A request that repeats a step is a duplicate: a send for the same chain and question (and, for `execute`, the same
 `txIndex`) that is pending, stuck, confirming or mined, never one that was replaced. The answer is the usual 202 with
@@ -643,7 +656,10 @@ What the watcher checks every minute:
 2. For each open question that has an answer it asks the same `decide()` the answer endpoint uses (the hub, the pass
    rule, the transaction hash) what the answer should be, and compares it with Reality's best answer. A question for a
    proposal the hub does not know, or one with a different transaction, should be answered `no`; a question asked
-   before the vote resolved, `invalid`.
+   before the vote ended, `invalid`, also after the vote has closed. When no answer can be decided (a time that cannot
+   be read, or a count not final yet) nothing is challenged and the question is looked at again on the next tick; a
+   standing `yes` on such a question is one `escalation_needed` with reason `cannot_decide`, since only a yes moves
+   money. A finalized question that cannot be decided stays open, with no event, until it can.
 3. A wrong answer is challenged at once with `decide()`'s answer and double the current bond, with `max_previous`
    set to the current bond. Every challenge goes through the spend cap and the serial queue like any other send, and
    the bond goes to the reclaim loop. A challenge still waiting for its receipt is not repeated. A challenge that
@@ -686,7 +702,7 @@ and `proposalId` are strings or `null` (an event that is not about one question,
 | `type` | When | `detail` |
 |---|---|---|
 | `answer_challenged` | The watcher answered a wrong Reality answer | `answer`, `reason`, `previousAnswer`, `previousBondWei`, `bondWei`, `txHash`, `deadline`, `deadlineTs` |
-| `escalation_needed` | The watcher could not challenge; the arbitrator has to take over before `deadline` | `reason` (`cap_reached` or `challenge_failed`), `currentBondWei`, `neededBondWei`, `currentAnswer`, `expectedAnswer`, `deadline`, `deadlineTs`, and `limit` and `until` or `attempts` |
+| `escalation_needed` | The watcher could not challenge; the arbitrator has to take over before `deadline` | `reason` (`cap_reached`, `challenge_failed`, or `cannot_decide` for a standing yes it could not judge), `currentBondWei`, `neededBondWei`, `currentAnswer`, `expectedAnswer` (null with `cannot_decide`), `deadline`, `deadlineTs`, and `limit` and `until`, `attempts`, or `decisionReason` |
 | `resolved` | A question the watcher flagged finalized with the right answer | `answer`, `reason` |
 | `wrong_final` | A question finalized with the wrong answer | `finalAnswer`, `expectedAnswer`, `reason`, `finalizedAt`, `executableAfter` |
 | `cap_reached` | A send was refused by a spend cap; once per window | `limit` (`day` or `month`), `until`, `monthStartsAt`, `refusedWei`, `spentDayWei`, `spentMonthWei` |

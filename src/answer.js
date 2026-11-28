@@ -4,13 +4,19 @@
 // finalize the scores first, because nothing else does), binds the proposal to the Safe's registered space, applies
 // the pass rule, builds the module's transaction hashes from the proposal's safeSnap plugin for this module and
 // compares their hash with the question's. Only decide() and decideFromVerdict() choose an answer, and the
-// answer endpoint and the watcher post exactly what they return:
-//   yes      the proposal passed, is in the Safe's space and its transactions hash to the question's hash
-//   invalid  the proposal is not closed and final yet, so the question was asked before the vote resolved
-//   no       everything else
+// answer endpoint and the watcher post exactly what they return; the execute endpoint sends only on yes:
+//   invalid  the question was asked before the vote ended (its Reality `created` time is before the hub's `end`),
+//            whatever the vote did afterwards: the module's question says such a question is always invalid.
+//            Also a question that is not, as a whole, the question the module builds from a proposal of this
+//            Safe's space and this module's transactions: a proposal the hub does not know, another space, no
+//            transactions for this module, or any other text (another hash, a separator inside the id).
+//   yes      the proposal passed and the question is the one the module builds from it
+//   no       a question that is the module's question for a proposal that did not pass
+// No answer (answer null, with a reason) when either time cannot be read, or when the question was asked after the
+// vote ended but its count is not final yet. Nothing is posted on a guess.
 import { getAddress, isAddress, isHex, pad } from 'viem';
 import { passed } from './passRule.js';
-import { moduleTransactionHash, packedTxHashes, buildQuestion } from './realityHash.js';
+import { moduleTransactionHash, packedTxHashes, buildQuestion, questionHashOf } from './realityHash.js';
 
 export const ANSWER_BYTES = Object.freeze({
   yes: pad('0x01', { size: 32 }),
@@ -107,27 +113,47 @@ export function createAnswerer({ hub, db, logger = console }) {
     return { ...out, kind: 'ok' };
   }
 
-  /** The answer for a verdict and the question's hash (hex of the packed transaction hashes, with or without 0x). */
-  function decideFromVerdict(verdict, questionHashHex) {
+  /**
+   * The answer for a verdict, the question's key (keccak256 of the question's whole text, the module's questionIds
+   * key) and the time the question was asked (Reality's `created`, seconds, a bigint; null when it could not be read).
+   */
+  function decideFromVerdict(verdict, questionKey, askedAt) {
+    const end = verdict.proposal?.end;
+    const endKnown = Number.isSafeInteger(end) && end > 0;
+    const askedKnown = typeof askedAt === 'bigint' && askedAt > 0n;
+    // A proposal the hub knows has a vote end: a question asked before it is invalid, whatever came after.
+    if (endKnown && askedKnown && askedAt < BigInt(end)) return { answer: 'invalid', reason: 'asked_before_resolution' };
+    // The question is compared whole with the one the module builds from the hub's proposal.
+    if (!isQuestionOf(verdict, questionKey)) {
+      const reason = ['unknown_group', 'unknown_proposal', 'wrong_space'].includes(verdict.kind) ? verdict.kind
+        : verdict.question ? 'question_mismatch' : verdict.pluginReason ?? verdict.kind;
+      return { answer: 'invalid', reason };
+    }
+    if (verdict.proposal) {
+      if (!endKnown) return { answer: null, reason: 'resolution_time_unknown' };
+      if (!askedKnown) return { answer: null, reason: 'question_time_unknown' };
+    }
     switch (verdict.kind) {
       case 'not_final':
-        return { answer: 'invalid', reason: 'not_final' };
+        return { answer: null, reason: 'not_final' };
       case 'ok':
-        return lower(String(questionHashHex).replace(/^0x/, '')) === lower(verdict.packedHash.slice(2))
-          ? { answer: 'yes', reason: 'passed' }
-          : { answer: 'no', reason: 'hash_mismatch' };
+        return { answer: 'yes', reason: 'passed' };
       default:
         return { answer: 'no', reason: verdict.kind === 'not_passed' ? verdict.reason : verdict.kind };
     }
   }
 
+  /** Is the question with this key, as a whole, the one the module builds from the verdict's proposal? */
+  const isQuestionOf = (verdict, questionKey) => typeof verdict.question === 'string' && typeof questionKey === 'string' && lower(questionKey) === questionHashOf(verdict.question);
+
   return {
     load,
     evaluate,
     decideFromVerdict,
-    /** decide(): read the hub and answer yes, no or invalid for the question with this hash. */
-    async decide({ chainId, safe, module, proposalId, questionHashHex }) {
-      return decideFromVerdict(await evaluate({ chainId, safe, module, proposalId }), questionHashHex);
+    isQuestionOf,
+    /** decide(): read the hub and answer yes, no or invalid (or null: not now) for the question with this key and time. */
+    async decide({ chainId, safe, module, proposalId, questionKey, askedAt }) {
+      return decideFromVerdict(await evaluate({ chainId, safe, module, proposalId }), questionKey, askedAt);
     },
   };
 }

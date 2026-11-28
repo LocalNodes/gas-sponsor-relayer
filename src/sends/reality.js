@@ -13,6 +13,7 @@ import { chainIsConfigured, chainIsSponsored, NOT_SPONSORED } from '../config.js
 import { ANSWER_BYTES, createAnswerer } from '../answer.js';
 import { HubError } from '../hub.js';
 import { questionHashOf } from '../realityHash.js';
+import { questionAskedAt } from '../questionTime.js';
 import { createPipeline } from './pipeline.js';
 
 const moduleAbi = parseAbi([
@@ -120,6 +121,12 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
 
   const readModule = (ctx, functionName, args = []) => ctx.clients.publicClient.readContract({ address: ctx.module, abi: moduleAbi, functionName, args });
   const readReality = (ctx, functionName, args = []) => ctx.clients.publicClient.readContract({ address: ctx.reality, abi: realityAbi, functionName, args });
+  const askedAt = (ctx, v, questionId, verdict) => questionAskedAt({
+    db, publicClient: ctx.clients.publicClient, reality: ctx.reality, chainId: v.chainId, questionId,
+    remember: { module: ctx.module, safe: v.safe, proposalId: v.proposalId, questionHash: verdict.packedHash.slice(2) },
+  });
+  // A decision without an answer is refused, and nothing is sent: the count is not final, or a time cannot be read.
+  const undecided = (verdict, decision, questionId) => (decision.reason === 'not_final' ? fromVerdict(verdict) : reply(409, { error: 'conflict', reason: decision.reason, questionId }));
   const sendReply = (sent, ok) => (sent.ok ? reply(202, { hash: sent.hash, status: 'pending', ...ok, ...(sent.duplicate ? { duplicate: true } : {}) }) : reply(sent.status, sent.body, sent.refusal));
 
   return {
@@ -164,8 +171,9 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
         if (await readReality(ctx, 'isFinalized', [questionId])) return reply(409, { error: 'conflict', reason: 'already_final', questionId });
         if ((await readReality(ctx, 'getBond', [questionId])) > 0n) return reply(409, { error: 'conflict', reason: 'already_answered', questionId });
 
-        // The question was found under the hash of the transactions the hub lists, so that is its hash.
-        const decision = answers.decideFromVerdict(verdict, verdict.packedHash);
+        // The question was found under the key of the module's question for the hub's proposal, so that is its key.
+        const decision = answers.decideFromVerdict(verdict, questionHashOf(verdict.question), await askedAt(ctx, v, questionId, verdict));
+        if (decision.answer === null) return undecided(verdict, decision, questionId);
         const bond = await readModule(ctx, 'minimumBond');
         const data = encodeFunctionData({ abi: realityAbi, functionName: 'submitAnswer', args: [questionId, ANSWER_BYTES[decision.answer], 0n] });
         const bondRef = `bond:${v.chainId}:${questionId}`;
@@ -208,6 +216,9 @@ export function createReality({ db, config, networks, chains, cap, queue, groupM
         }
         if (!(await readReality(ctx, 'isFinalized', [questionId]))) return reply(409, { error: 'conflict', reason: 'not_finalized', questionId });
         if ((await readReality(ctx, 'resultFor', [questionId])) !== ANSWER_BYTES.yes) return reply(409, { error: 'conflict', reason: 'answer_not_yes', questionId });
+        // Reality's yes is executed only when the relayer's own answer is yes: never for a question asked before the vote ended.
+        const decision = answers.decideFromVerdict(verdict, questionHashOf(verdict.question), await askedAt(ctx, v, questionId, verdict));
+        if (decision.answer !== 'yes') return reply(409, { error: 'conflict', reason: decision.reason, questionId });
 
         // The module wants a block strictly after finalize time + cooldown. Until the chain has one, nothing is sent.
         const [finalizeTs, cooldown, latest] = await Promise.all([

@@ -3,41 +3,45 @@
 // With a short Reality timeout, a wrong "yes" can finalize and move money long before a daily check runs. So every
 // minute this loop looks at every registered Group's Reality module:
 //
-//   1. It reads the LogNewQuestion events whose questioner is the module (block ranges of at most 2,000, a cursor
-//      per module) and keeps each question in the `questions` table until Reality says it is final.
-//   2. For an open question that has an answer, it asks answer.js decide() what the answer should be and compares it
-//      with Reality's current best answer. The relayer's own answer has no special weight: a question it answered is
-//      judged like any other.
-//   3. A wrong answer is challenged at once with decide()'s answer and double the current bond (max_previous = the
-//      current bond, so a front-run changes nothing silently). Every challenge goes through the spend cap and the
-//      serial queue. When the cap cannot cover it, or the challenge keeps failing, the watcher stores
+//   1. It reads the LogNewQuestion events whose questioner is the module, from final blocks only (block ranges of at
+//      most 2,000, a cursor per module that never passes the finalized block), and keeps each question in the
+//      `questions` table, with its whole text as a key, until Reality says it is final.
+//   2. For an open question that has an answer, it asks answer.js what the answer should be, from the hub and the time
+//      the question was asked (a question asked before the vote ended stays invalid; a question that is not, as a
+//      whole, the module's question for a proposal of the Group is invalid), and compares it with Reality's current
+//      best answer. The relayer's own answer has no special weight: a question it answered is judged like any other.
+//      When no answer can be decided (a time that cannot be read, or a count not final yet) nothing is challenged; a
+//      standing yes is one escalation_needed (reason cannot_decide), so the organizers can watch it.
+//   3. A bond is spent only where money is at stake: to overturn a standing yes that should not be yes, to put the
+//      rightful yes on a proposal that passed, and to turn a standing no into invalid on a question for a proposal that
+//      passed but was asked before the vote ended (so it can be asked again). A standing no or invalid that already
+//      stops the payment is left alone otherwise. A challenge carries decide()'s answer and double the current bond
+//      (max_previous = the current bond, so a front-run changes nothing silently). Every challenge goes through the
+//      spend cap and the serial queue. When the cap cannot cover it, or the challenge keeps failing, the watcher stores
 //      escalation_needed with the question's finalize time as the deadline: the Group Safe owns the arbitrator, and
 //      that is the backstop (D-07, D-16).
-//   4. A finalized question is checked against decide() once more: a wrong final answer is a wrong_final event, and a
-//      question the watcher had flagged that ended right is a resolved event.
+//   4. A finalized question is checked against decide() once more: a final answer that is wrong where money is at
+//      stake (by the same rule) is a wrong_final event, and a question the watcher had flagged that ended without
+//      such a wrong is a resolved event.
 //
 // A hub outage never causes a challenge: when decide() cannot read the hub the question is left for the next tick.
 // The bond of a challenge goes to the reclaim loop through the reality_questions table.
-import { encodeFunctionData, parseAbi, parseAbiItem } from 'viem';
+import { encodeFunctionData, parseAbi } from 'viem';
 import { build } from './allowlist.js';
 import { chainIsConfigured } from './config.js';
 import { ANSWER_BYTES, createAnswerer } from './answer.js';
 import { HubError } from './hub.js';
-import { QUESTION_SEPARATOR } from './realityHash.js';
+import { createdOf, DEFAULT_LOOKBACK_BLOCKS, finalizedBlock, inRange, LOG_RANGE_BLOCKS, newQuestion, parseQuestion, questionAskedAt, questionBytesOf } from './questionTime.js';
 import { createPipeline } from './sends/pipeline.js';
 import { createEvents } from './events.js';
 
 export const DEFAULT_WATCH_INTERVAL_S = 60;
 export const DEFAULT_LOW_BALANCE_WEI = 20_000_000_000_000_000n;
-/** Most blocks one getLogs call covers. */
-export const LOG_RANGE_BLOCKS = 2000n;
-/** How far back the first look at a module goes: more than an hour on the fastest chain we serve. */
-export const DEFAULT_LOOKBACK_BLOCKS = 2400n;
+// Most blocks one getLogs call covers, and how far back the first look at a module goes.
+export { DEFAULT_LOOKBACK_BLOCKS, LOG_RANGE_BLOCKS, parseQuestion };
 /** Challenges tried at one bond level before the watcher gives up and asks for the arbitrator. */
 export const MAX_CHALLENGE_ATTEMPTS = 3;
 
-const PROPOSAL_ID = /^0x[0-9a-f]{64}$/;
-const HASH_HEX = /^[0-9a-f]{64}$/;
 const WHOLE = /^(0|[1-9][0-9]*)$/;
 
 /**
@@ -64,15 +68,6 @@ export function watchSettingsFromEnv(env = process.env) {
   return { intervalMs: seconds * 1000, lowBalanceWei };
 }
 
-/** The proposal id and the hex of the packed transaction hash in a module question (`<id>` U+241F `<hex>`). */
-export function parseQuestion(text) {
-  const s = String(text);
-  const i = s.indexOf(QUESTION_SEPARATOR);
-  if (i < 0) return { proposalId: s, hash: null };
-  const hash = s.slice(i + QUESTION_SEPARATOR.length);
-  return { proposalId: s.slice(0, i), hash: HASH_HEX.test(hash) ? hash : null };
-}
-
 const realityAbi = parseAbi([
   'function isFinalized(bytes32 question_id) view returns (bool)',
   'function getBestAnswer(bytes32 question_id) view returns (bytes32)',
@@ -82,9 +77,6 @@ const realityAbi = parseAbi([
   'function submitAnswer(bytes32 question_id, bytes32 answer, uint256 max_previous) payable',
 ]);
 const moduleAbi = parseAbi(['function questionCooldown() view returns (uint32)']);
-const newQuestion = parseAbiItem(
-  'event LogNewQuestion(bytes32 indexed question_id, address indexed user, uint256 template_id, string question, bytes32 indexed content_hash, address arbitrator, uint32 timeout, uint32 opening_ts, uint256 nonce, uint256 created)',
-);
 
 const lower = (s) => String(s).toLowerCase();
 const isoOf = (seconds) => new Date(Number(seconds) * 1000).toISOString();
@@ -117,31 +109,82 @@ export function createWatcher({
   const realityOf = (chainId) => networks[String(chainId)]?.reality ?? null;
   const readReality = (clients, reality, functionName, args) => clients.publicClient.readContract({ address: reality, abi: realityAbi, functionName, args });
 
-  /** decide()'s answer for a question; the same proposal and hash are asked of the hub once per tick. */
-  function decisionFor(q, cache) {
-    if (!PROPOSAL_ID.test(q.proposalId) || !HASH_HEX.test(q.questionHash)) {
-      // Not a question the module would build from a hub proposal: nothing to read, and the answer is no.
-      return Promise.resolve({ answer: 'no', reason: 'unknown_proposal' });
+  /**
+   * The answer for a question, from the hub (each proposal read once per tick), the question's whole text and the
+   * time it was asked. `matched`: the question is, as a whole, the module's question for a proposal of the Group;
+   * `passedMatch`: and that proposal passed; `voteOpen`: its vote or count is not final yet.
+   */
+  async function decisionFor(q, clients, reality, cache) {
+    const askedAt = await questionAskedAt({ db, publicClient: clients.publicClient, reality, chainId: q.chainId, questionId: q.questionId, lookback });
+    const row = db.getWatched(q.chainId, q.questionId) ?? q;
+    // The whole question is not read yet (its block is not final, or an older row): nothing is decided.
+    const none = { matched: false, passedMatch: false, voteOpen: false };
+    if (!row.questionKey) return { answer: null, reason: 'question_time_unknown', ...none };
+    if (!row.proposalId) {
+      // Not a question the module builds from a hub proposal (a separator inside the id, or no id): invalid.
+      return { answer: 'invalid', reason: 'question_mismatch', ...none };
     }
-    const key = `${q.chainId}:${lower(q.module)}:${q.proposalId}:${q.questionHash}`;
-    if (!cache.has(key)) cache.set(key, answers.decide({ chainId: q.chainId, safe: q.safe, module: q.module, proposalId: q.proposalId, questionHashHex: q.questionHash }));
-    return cache.get(key);
+    const key = `${q.chainId}:${lower(q.safe)}:${lower(q.module)}:${row.proposalId}`;
+    if (!cache.has(key)) cache.set(key, answers.evaluate({ chainId: q.chainId, safe: q.safe, module: q.module, proposalId: row.proposalId }));
+    const verdict = await cache.get(key);
+    const decision = answers.decideFromVerdict(verdict, row.questionKey, askedAt);
+    const matched = answers.isQuestionOf(verdict, row.questionKey);
+    return { ...decision, matched, passedMatch: matched && verdict.kind === 'ok', voteOpen: matched && verdict.kind === 'not_final' };
   }
 
-  /** Read the module's new LogNewQuestion events, in ranges of at most 2,000 blocks, and remember each question. */
+  /**
+   * Whether a bond is spent to change `current` (Reality's answer bytes) into the decision's answer. Only where money
+   * is at stake: a yes that should not be yes, a rightful yes not standing, and a no on a passed proposal's question
+   * asked too early (a no can never be asked again; an invalid can).
+   */
+  function worthChallenging(current, decision) {
+    const expected = ANSWER_BYTES[decision.answer];
+    if (current === expected) return false;
+    if (current === ANSWER_BYTES.yes || decision.answer === 'yes') return true;
+    return decision.answer === 'invalid' && current === ANSWER_BYTES.no && decision.reason === 'asked_before_resolution' && decision.passedMatch;
+  }
+
+  /** Read the module's new LogNewQuestion events from final blocks, in ranges of at most 2,000, and remember each question. */
   async function discover(group, module) {
     const clients = chains.get(group.chainId);
     const reality = realityOf(group.chainId);
-    const key = `questions:${group.chainId}:${lower(module)}`;
-    const latest = await clients.publicClient.getBlockNumber({ cacheTime: 0 });
+    // A new cursor name: a cursor of an older relayer may have passed blocks that were not final when it read them.
+    const key = `questions-final:${group.chainId}:${lower(module)}`;
+    const finalized = await finalizedBlock(clients.publicClient);
+    if (finalized === null) {
+      logger.warn(`watcher: questions of ${group.safe} on ${group.chainId} not read: the finalized block cannot be read`);
+      return;
+    }
     const saved = db.getCursor(key);
-    let from = saved === null ? (latest > lookback ? latest - lookback : 0n) : BigInt(saved) + 1n;
-    while (from <= latest) {
-      const to = from + LOG_RANGE_BLOCKS - 1n < latest ? from + LOG_RANGE_BLOCKS - 1n : latest;
-      const logs = await clients.publicClient.getLogs({ address: reality, event: newQuestion, args: { user: module }, fromBlock: from, toBlock: to });
+    let from;
+    if (saved !== null) {
+      from = BigInt(saved) + 1n;
+    } else {
+      // On a move from an older relayer: its cursor read up to the head, so its last blocks were not final. The first
+      // scan starts the look-back before it and reads forward, so no question asked since it last read is skipped.
+      const older = db.getCursor(`questions:${group.chainId}:${lower(module)}`);
+      if (older !== null && /^\d+$/.test(older)) {
+        from = BigInt(older) > lookback ? BigInt(older) - lookback : 0n;
+      } else {
+        from = finalized > lookback ? finalized - lookback : 0n;
+        logger.warn(`watcher: first scan of questions on chain ${group.chainId} with no cursor: blocks ${from} to ${finalized}; questions asked before block ${from} are not read`);
+      }
+    }
+    while (from <= finalized) {
+      const to = from + LOG_RANGE_BLOCKS - 1n < finalized ? from + LOG_RANGE_BLOCKS - 1n : finalized;
+      const logs = inRange(await clients.publicClient.getLogs({ address: reality, event: newQuestion, args: { user: module }, fromBlock: from, toBlock: to }), from, to);
       for (const log of logs) {
-        const { proposalId, hash } = parseQuestion(log.args.question);
-        db.insertWatched({ chainId: group.chainId, questionId: log.args.question_id, module, safe: group.safe, proposalId, questionHash: hash ?? '', createdBlock: log.blockNumber });
+        const bytes = questionBytesOf(log);
+        // A log whose data holds no question is not the module's question: it is not stored.
+        if (bytes === null) continue;
+        const { proposalId, hash, key: questionKey } = parseQuestion(bytes);
+        const row = { proposalId, questionHash: hash, questionKey, createdFinal: true };
+        db.insertWatched({ chainId: group.chainId, questionId: log.args.question_id, module, safe: group.safe, createdBlock: log.blockNumber, createdTs: createdOf(log), ...row });
+        // A row an older relayer stored keeps its first reading; this one, from a final block, replaces it.
+        const stored = db.getWatched(group.chainId, log.args.question_id);
+        if (stored && !stored.questionKey) {
+          db.updateWatched(group.chainId, log.args.question_id, { ...row, createdBlock: log.blockNumber.toString(), createdTs: createdOf(log)?.toString() ?? null, createdFinal: createdOf(log) !== null });
+        }
       }
       db.setCursor(key, to.toString());
       from = to + 1n;
@@ -164,7 +207,15 @@ export function createWatcher({
     }
   }
 
-  const base = (q) => ({ chainId: q.chainId, safe: q.safe, module: q.module, questionId: q.questionId, proposalId: q.proposalId });
+  // An event names a hub proposal only when the question is, as a whole, that proposal's question ('' otherwise).
+  const base = (q) => ({ chainId: q.chainId, safe: q.safe, module: q.module, questionId: q.questionId, proposalId: q.eventProposalId ?? '' });
+  /** The row as stored now (decisionFor may have read it again), with the proposal its events may name. */
+  const judged = (q, decision) => {
+    const row = db.getWatched(q.chainId, q.questionId) ?? q;
+    return { ...row, eventProposalId: decision.matched ? row.proposalId : '' };
+  };
+  /** The module's key of the question's whole text, for the detail of an event (null when not read yet). */
+  const keyOf = (q) => db.getWatched(q.chainId, q.questionId)?.questionKey ?? q.questionKey ?? null;
 
   /**
    * Tell the organizers that the arbitrator has to take over before `finalizeTs`. The event is stored once per wrong
@@ -180,9 +231,10 @@ export function createWatcher({
         currentBondWei: bond,
         neededBondWei: bond * 2n,
         currentAnswer: answerName(best),
-        expectedAnswer: answerName(expected),
+        expectedAnswer: expected === null ? null : answerName(expected),
         deadline: isoOf(finalizeTs),
         deadlineTs: Number(finalizeTs),
+        questionHash: keyOf(q),
         ...extra,
       },
     });
@@ -254,6 +306,7 @@ export function createWatcher({
         txHash: sent.hash,
         deadline: isoOf(finalizeTs),
         deadlineTs: Number(finalizeTs),
+        questionHash: keyOf(q),
       },
     }));
     actions.push({ action: 'challenged', chainId: q.chainId, questionId: q.questionId, answer: decision.answer, bondWei: next, hash: sent.hash });
@@ -270,13 +323,18 @@ export function createWatcher({
       const result = lower(await read('resultFor'));
       let decision;
       try {
-        decision = await decisionFor(q, cache);
+        decision = await decisionFor(q, clients, reality, cache);
       } catch (e) {
         if (e instanceof HubError) return;
         throw e;
       }
-      const expected = ANSWER_BYTES[decision.answer];
-      if (result !== expected) {
+      // Not decided: the question stays open, and the next tick asks again.
+      if (decision.answer === null) return;
+      q = judged(q, decision);
+      // A final no on a proposal's own question asked before its vote ended stops that proposal for good if it passes:
+      // the question stays open until the vote is final, and is then judged by the same rule.
+      if (decision.voteOpen && decision.reason === 'asked_before_resolution' && result === ANSWER_BYTES.no) return;
+      if (worthChallenging(result, decision)) {
         const finalizeTs = await read('getFinalizeTS');
         const cooldown = await clients.publicClient.readContract({ address: q.module, abi: moduleAbi, functionName: 'questionCooldown' }).catch(() => null);
         feed.add('wrong_final', {
@@ -287,11 +345,12 @@ export function createWatcher({
             reason: decision.reason,
             finalizedAt: isoOf(finalizeTs),
             ...(cooldown === null ? {} : { executableAfter: isoOf(BigInt(finalizeTs) + BigInt(cooldown)) }),
+            questionHash: keyOf(q),
           },
         });
         actions.push({ action: 'wrong_final', chainId: q.chainId, questionId: q.questionId });
       } else if (q.flagged) {
-        feed.add('resolved', { ...base(q), detail: { answer: decision.answer, reason: decision.reason } });
+        feed.add('resolved', { ...base(q), detail: { answer: decision.answer, reason: decision.reason, questionHash: keyOf(q) } });
         actions.push({ action: 'resolved', chainId: q.chainId, questionId: q.questionId });
       }
       db.updateWatched(q.chainId, q.questionId, { status: 'closed' });
@@ -304,7 +363,7 @@ export function createWatcher({
     const best = lower(await read('getBestAnswer'));
     let decision;
     try {
-      decision = await decisionFor(q, cache);
+      decision = await decisionFor(q, clients, reality, cache);
     } catch (e) {
       if (e instanceof HubError) {
         logger.warn(`watcher: hub not readable for ${q.proposalId} (${e.code}); question left for the next tick`);
@@ -312,7 +371,15 @@ export function createWatcher({
       }
       throw e;
     }
-    if (best === ANSWER_BYTES[decision.answer]) return;
+    q = judged(q, decision);
+    if (decision.answer === null) {
+      // Nothing is challenged on a guess. Only a yes moves money, so a standing yes is told to the organizers.
+      logger.warn(`watcher: no answer decided for ${q.questionId} on ${q.chainId} (${decision.reason}); question left for the next tick`);
+      if (best === ANSWER_BYTES.yes) escalate(q, { reason: 'cannot_decide', bond, best, expected: null, finalizeTs: await read('getFinalizeTS'), extra: { decisionReason: decision.reason } }, actions);
+      return;
+    }
+    // A standing answer that already stops the payment is left alone (no bond is spent on it).
+    if (!worthChallenging(best, decision)) return;
     const finalizeTs = await read('getFinalizeTS');
     await challenge(q, { clients, reality, bond, best, decision, finalizeTs }, actions);
   }

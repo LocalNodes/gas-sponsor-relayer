@@ -201,6 +201,8 @@ export function fakeNode(o = {}) {
     },
     async estimateGas() { return s.gas; },
     async estimateFeesPerGas() { if (s.feeError) throw s.feeError; return { maxFeePerGas: s.maxFeePerGas, maxPriorityFeePerGas: s.maxPriorityFeePerGas }; },
+    // Event logs (a Reality question's LogNewQuestion): none unless a test replaces this.
+    async getLogs() { return []; },
     async readContract(req) {
       if (!s.read) throw new Error(`unexpected read ${req.functionName}`);
       return s.read(req);

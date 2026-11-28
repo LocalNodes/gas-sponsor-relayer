@@ -160,6 +160,12 @@ export function openDb(path) {
       proposal_id TEXT NOT NULL,
       question_hash TEXT NOT NULL,
       created_block TEXT NOT NULL,
+      -- Reality's own time for the question (LogNewQuestion created, seconds); NULL until read.
+      created_ts TEXT,
+      -- 1 once the log was read at its block after that block was final: the stored time is then used as it is.
+      created_final INTEGER NOT NULL DEFAULT 0,
+      -- keccak256 of the question's whole text (the module's questionIds key), read with its log; NULL until read.
+      question_key TEXT,
       status TEXT NOT NULL,
       flagged INTEGER NOT NULL DEFAULT 0,
       challenged_bond TEXT,
@@ -206,6 +212,12 @@ export function openDb(path) {
   for (const c of ['safe', 'module', 'question_id', 'proposal_id']) {
     if (!eventColumns.has(c)) db.exec(`ALTER TABLE events ADD COLUMN ${c} TEXT`);
   }
+  // An older database keeps no asking time for a question; questionTime.js reads it from the question's block.
+  const questionColumns = new Set(db.prepare('PRAGMA table_info(questions)').all().map((c) => c.name));
+  if (!questionColumns.has('created_ts')) db.exec('ALTER TABLE questions ADD COLUMN created_ts TEXT');
+  if (!questionColumns.has('created_final')) db.exec('ALTER TABLE questions ADD COLUMN created_final INTEGER NOT NULL DEFAULT 0');
+  // An older database keeps no whole-question key; questionTime.js reads the question's log again and stores it.
+  if (!questionColumns.has('question_key')) db.exec('ALTER TABLE questions ADD COLUMN question_key TEXT');
   // An older database has no first block or consuming hash on a send. A send never bumped was
   // first broadcast at its sent block; a bumped one has lost that block, so no proof can release it (only a receipt
   // of its own settles it).
@@ -311,7 +323,7 @@ export function openDb(path) {
   const insertEvent = db.prepare('INSERT INTO events (at, kind, chain_id, detail, safe, module, question_id, proposal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   const listEvents = db.prepare('SELECT id, at, kind, chain_id, detail, safe, module, question_id, proposal_id FROM events ORDER BY id');
   const insertWatched = db.prepare(
-    'INSERT OR IGNORE INTO questions (chain_id, question_id, module, safe, proposal_id, question_hash, created_block, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT OR IGNORE INTO questions (chain_id, question_id, module, safe, proposal_id, question_hash, created_block, created_ts, created_final, question_key, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );
   const getWatched = db.prepare('SELECT * FROM questions WHERE chain_id = ? AND question_id = ?');
   const openWatched = db.prepare("SELECT * FROM questions WHERE status = 'open' ORDER BY created_at, chain_id, question_id");
@@ -421,6 +433,9 @@ export function openDb(path) {
     proposalId: r.proposal_id,
     questionHash: r.question_hash,
     createdBlock: BigInt(r.created_block),
+    createdTs: r.created_ts === null ? null : BigInt(r.created_ts),
+    createdFinal: Number(r.created_final) === 1,
+    questionKey: r.question_key ?? null,
     status: r.status,
     flagged: Number(r.flagged) === 1,
     challengedBond: r.challenged_bond ?? null,
@@ -449,6 +464,12 @@ export function openDb(path) {
     challengeNonce: 'challenge_nonce',
     challengeAttempts: 'challenge_attempts',
     escalatedBond: 'escalated_bond',
+    createdTs: 'created_ts',
+    createdBlock: 'created_block',
+    createdFinal: 'created_final',
+    questionKey: 'question_key',
+    proposalId: 'proposal_id',
+    questionHash: 'question_hash',
   };
   const toGroup = (r) => ({ chainId: Number(r.chain_id), safe: getAddress(r.safe), space: r.space, community: r.community });
   return {
@@ -638,7 +659,7 @@ export function openDb(path) {
     },
     // Questions the wrong-answer watcher follows (watcher.js).
     insertWatched(q) {
-      insertWatched.run(q.chainId, q.questionId, q.module.toLowerCase(), q.safe.toLowerCase(), q.proposalId, q.questionHash, q.createdBlock.toString(), 'open', Date.now());
+      insertWatched.run(q.chainId, q.questionId, q.module.toLowerCase(), q.safe.toLowerCase(), q.proposalId, q.questionHash, q.createdBlock.toString(), q.createdTs ? q.createdTs.toString() : null, q.createdFinal ? 1 : 0, q.questionKey ?? null, 'open', Date.now());
     },
     getWatched(chainId, questionId) {
       const r = getWatched.get(chainId, questionId);
