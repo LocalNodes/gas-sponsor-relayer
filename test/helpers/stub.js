@@ -68,6 +68,8 @@ export function stubChains(networks, opts = {}) {
     async estimateGas(args) { calls.estimate += 1; if (o.plainEstimateError && !args?.account) throw o.plainEstimateError; if (o.estimateError && !(o.estimateErrorAccountOnly && !args?.account)) throw o.estimateError; return o.gas; },
     async estimateFeesPerGas() { if (o.feeError) throw o.feeError; return { maxFeePerGas: o.maxFeePerGas, maxPriorityFeePerGas: o.maxPriorityFeePerGas }; },
     async getBlockNumber() { return typeof o.block === 'function' ? o.block() : o.block; },
+    // Event logs (a Reality question's LogNewQuestion): none unless the test gives `logs`.
+    async getLogs() { return o.logs ?? []; },
     async getTransactionReceipt({ hash }) { const r = o.receipts[hash]; if (!r) throw new Error('receipt not found'); return r; },
     async call() { calls.call += 1; if (o.sim instanceof Error) throw o.sim; return { data: o.sim }; },
   });

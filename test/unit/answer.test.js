@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ANSWER_BYTES, createAnswerer, moduleTransactions } from '../../src/answer.js';
 import { createHub, HubError, normalizeProposal } from '../../src/hub.js';
-import { buildQuestion, moduleTransactionHash, packedTxHashes, questionHashOf } from '../../src/realityHash.js';
+import { buildQuestion, moduleTransactionHash, packedTxHashes, QUESTION_SEPARATOR, questionHashOf } from '../../src/realityHash.js';
 import { hubProposal } from '../stub/hub-stub.js';
 
 const vector = JSON.parse(readFileSync(new URL('../fixtures/vectors/reality.json', import.meta.url), 'utf8'));
@@ -16,6 +16,10 @@ const SAFE = '0x5afe5afE5afE5afE5afE5aFe5aFe5Afe5Afe5AfE';
 const SPACE = 'gov-vectors.eth';
 const [SINGLE, DOUBLE] = CASE.proposals;
 const silent = { info() {}, warn() {}, error() {} };
+/** The hub's end of the vote (hubProposal's default), and question times after it and before it. */
+const END = 1_700_000_000;
+const AFTER = BigInt(END + 100);
+const BEFORE = BigInt(END - 100);
 
 /** A proposal in the hub's shape for one of the vector's proposals. */
 function proposalFor(vp, patch = {}) {
@@ -50,8 +54,10 @@ function answerer({ proposal, group = { chainId: CHAIN, safe: SAFE, space: SPACE
   return { hub, ...createAnswerer({ hub, db, logger: silent }) };
 }
 
+/** The module's key of the whole question it builds from this id and these transaction hashes. */
+const keyOf = (proposalId, txHashes) => questionHashOf(buildQuestion(proposalId, txHashes));
 const ask = (a, vp, extra = {}) =>
-  a.decide({ chainId: CHAIN, safe: SAFE, module: MODULE, proposalId: vp.proposalId, questionHashHex: packedTxHashes(vp.txHashes), ...extra });
+  a.decide({ chainId: CHAIN, safe: SAFE, module: MODULE, proposalId: vp.proposalId, questionKey: keyOf(vp.proposalId, vp.txHashes), askedAt: AFTER, ...extra });
 
 describe('answer', () => {
   test('answer: transaction hashes, the packed hash and the question equal the shared vector', () => {
@@ -76,23 +82,61 @@ describe('answer', () => {
     assert.deepEqual(await ask(two, DOUBLE), { answer: 'yes', reason: 'passed' });
   });
 
-  test('answer: the hash may be given with or without 0x and in any case', async () => {
+  test('answer: the question key may be given in any case', async () => {
     const a = answerer({ proposal: proposalFor(SINGLE) });
-    const hex = packedTxHashes(SINGLE.txHashes);
-    for (const h of [hex, hex.slice(2), hex.toUpperCase().replace('0X', '0x')]) {
-      assert.equal((await ask(a, SINGLE, { questionHashHex: h })).answer, 'yes', h);
+    const key = keyOf(SINGLE.proposalId, SINGLE.txHashes);
+    for (const k of [key, key.toUpperCase().replace('0X', '0x')]) {
+      assert.equal((await ask(a, SINGLE, { questionKey: k })).answer, 'yes', k);
     }
   });
 
-  test('answer: invalid when the proposal is not closed and final yet', async () => {
+  test('answer: invalid for a question asked before the vote ended, whatever the vote did after', async () => {
     for (const patch of [
       { state: 'active', scoresState: 'pending', scores: [] },
       { state: 'closed', scoresState: 'pending', scores: [] },
       { state: 'pending', scoresState: 'pending', scores: [] },
+      {},
+      { scores: [1, 2, 0] },
+      { space: 'someone-else.eth' },
     ]) {
       const a = answerer({ proposal: proposalFor(SINGLE, patch) });
-      assert.deepEqual(await ask(a, SINGLE), { answer: 'invalid', reason: 'not_final' }, JSON.stringify(patch));
+      assert.deepEqual(await ask(a, SINGLE, { askedAt: BEFORE }), { answer: 'invalid', reason: 'asked_before_resolution' }, JSON.stringify(patch));
+      assert.deepEqual(await ask(a, SINGLE, { askedAt: BigInt(END) - 1n }), { answer: 'invalid', reason: 'asked_before_resolution' }, JSON.stringify(patch));
     }
+    // Also when the question is not the proposal's.
+    const a = answerer({ proposal: proposalFor(SINGLE) });
+    assert.deepEqual(await ask(a, SINGLE, { askedAt: BEFORE, questionKey: keyOf(SINGLE.proposalId, DOUBLE.txHashes) }), { answer: 'invalid', reason: 'asked_before_resolution' });
+  });
+
+  test('answer: a question asked at the second the vote ended, or after, is answered by the vote', async () => {
+    const a = answerer({ proposal: proposalFor(SINGLE) });
+    assert.deepEqual(await ask(a, SINGLE, { askedAt: BigInt(END) }), { answer: 'yes', reason: 'passed' });
+    assert.deepEqual(await ask(a, SINGLE, { askedAt: AFTER }), { answer: 'yes', reason: 'passed' });
+  });
+
+  test('answer: no answer for a question asked after the vote ended while its count is not final', async () => {
+    for (const patch of [
+      { state: 'active', scoresState: 'pending', scores: [] },
+      { state: 'closed', scoresState: 'pending', scores: [] },
+    ]) {
+      const a = answerer({ proposal: proposalFor(SINGLE, patch) });
+      assert.deepEqual(await ask(a, SINGLE), { answer: null, reason: 'not_final' }, JSON.stringify(patch));
+    }
+  });
+
+  test('answer: no answer when the asking time or the end of the vote cannot be read', async () => {
+    const a = answerer({ proposal: proposalFor(SINGLE) });
+    for (const askedAt of [null, undefined, 0n, -1n, END + 100, '1700000100']) {
+      assert.deepEqual(await ask(a, SINGLE, { askedAt }), { answer: null, reason: 'question_time_unknown' }, String(askedAt));
+    }
+    for (const end of [null, 0, -5, 1.5, '']) {
+      const b = answerer({ proposal: proposalFor(SINGLE, { end }) });
+      assert.deepEqual(await ask(b, SINGLE), { answer: null, reason: 'resolution_time_unknown' }, String(end));
+    }
+    // A proposal the hub does not know has no vote to wait for: invalid, whatever the time.
+    assert.deepEqual(await ask(answerer({ proposal: null }), SINGLE, { askedAt: null }), { answer: 'invalid', reason: 'unknown_proposal' });
+    // A question that is not the proposal's is decided without either time.
+    assert.deepEqual(await ask(a, SINGLE, { askedAt: null, questionKey: keyOf(SINGLE.proposalId, DOUBLE.txHashes) }), { answer: 'invalid', reason: 'question_mismatch' });
   });
 
   test('answer: a closed proposal with pending scores makes the relayer ask the sequencer, then reads again', async () => {
@@ -107,12 +151,12 @@ describe('answer', () => {
     assert.equal(active.hub.scoresCalls, 0);
   });
 
-  test('answer: a failing sequencer call does not stop the decision; scores that stay pending are invalid', async () => {
+  test('answer: a failing sequencer call does not stop the decision; scores that stay pending give no answer yet', async () => {
     const a = answerer({ proposal: proposalFor(SINGLE, { state: 'closed', scoresState: 'pending', scores: [] }) });
     a.hub.finalizeScores = async () => {
       throw new HubError('hub_unavailable');
     };
-    assert.deepEqual(await ask(a, SINGLE), { answer: 'invalid', reason: 'not_final' });
+    assert.deepEqual(await ask(a, SINGLE), { answer: null, reason: 'not_final' });
   });
 
   test('answer: no for a closed, final proposal that did not pass', async () => {
@@ -132,32 +176,41 @@ describe('answer', () => {
     assert.deepEqual(await ask(a, SINGLE), { answer: 'no', reason: 'scores_shape' });
   });
 
-  test('answer: no for a proposal in another space, and the plugin is not even read', async () => {
+  test('answer: invalid for a proposal in another space, and the plugin is not even read', async () => {
     const other = proposalFor(SINGLE);
     other.space.id = 'someone-else.eth';
-    assert.deepEqual(await ask(answerer({ proposal: other }), SINGLE), { answer: 'no', reason: 'wrong_space' });
+    assert.deepEqual(await ask(answerer({ proposal: other }), SINGLE), { answer: 'invalid', reason: 'wrong_space' });
     // The comparison ignores case, like ENS names do.
     const upper = proposalFor(SINGLE);
     upper.space.id = SPACE.toUpperCase();
     assert.equal((await ask(answerer({ proposal: upper }), SINGLE)).answer, 'yes');
   });
 
-  test('answer: no when the question hash is not the hash of the proposal transactions', async () => {
+  test('answer: invalid when the question is not, as a whole, the module question for the proposal', async () => {
     const a = answerer({ proposal: proposalFor(SINGLE) });
-    assert.deepEqual(await ask(a, SINGLE, { questionHashHex: packedTxHashes(DOUBLE.txHashes) }), { answer: 'no', reason: 'hash_mismatch' });
-    assert.deepEqual(await ask(a, SINGLE, { questionHashHex: `0x${'11'.repeat(32)}` }), { answer: 'no', reason: 'hash_mismatch' });
-    assert.deepEqual(await ask(a, SINGLE, { questionHashHex: '' }), { answer: 'no', reason: 'hash_mismatch' });
+    const mismatch = { answer: 'invalid', reason: 'question_mismatch' };
+    // Another hash after the id.
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: keyOf(SINGLE.proposalId, DOUBLE.txHashes) }), mismatch);
+    // The proposal's own hash, with the separator and more inside the id: the module would execute the last hash.
+    const packed = packedTxHashes(SINGLE.txHashes).slice(2);
+    const inside = questionHashOf(`${SINGLE.proposalId}${QUESTION_SEPARATOR}${packed}${QUESTION_SEPARATOR}${packedTxHashes(DOUBLE.txHashes).slice(2)}`);
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: inside }), mismatch);
+    // The proposal's question with anything added, and no key at all.
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: questionHashOf(`${buildQuestion(SINGLE.proposalId, SINGLE.txHashes)} `) }), mismatch);
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: `0x${'11'.repeat(32)}` }), mismatch);
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: '' }), mismatch);
+    assert.deepEqual(await ask(a, SINGLE, { questionKey: null }), mismatch);
   });
 
-  test('answer: transaction order matters: swapping two transactions gives no', async () => {
+  test('answer: transaction order matters: swapping two transactions gives invalid', async () => {
     const swapped = proposalFor(DOUBLE);
     const rows = swapped.plugins.safeSnap.safes[0].txs[0];
     swapped.plugins.safeSnap.safes[0].txs[0] = [rows[1], rows[0]];
-    assert.deepEqual(await ask(answerer({ proposal: swapped }), DOUBLE), { answer: 'no', reason: 'hash_mismatch' });
+    assert.deepEqual(await ask(answerer({ proposal: swapped }), DOUBLE), { answer: 'invalid', reason: 'question_mismatch' });
     assert.equal((await ask(answerer({ proposal: proposalFor(DOUBLE) }), DOUBLE)).answer, 'yes');
   });
 
-  test('answer: a changed payment (value, recipient, data, operation) gives no', async () => {
+  test('answer: a changed payment (value, recipient, data, operation) gives invalid', async () => {
     for (const edit of [
       (t) => { t.value = String(BigInt(t.value) + 1n); },
       (t) => { t.to = '0x0000000000000000000000000000000000000001'; },
@@ -166,31 +219,31 @@ describe('answer', () => {
     ]) {
       const p = proposalFor(SINGLE);
       edit(p.plugins.safeSnap.safes[0].txs[0][0]);
-      assert.deepEqual(await ask(answerer({ proposal: p }), SINGLE), { answer: 'no', reason: 'hash_mismatch' });
+      assert.deepEqual(await ask(answerer({ proposal: p }), SINGLE), { answer: 'invalid', reason: 'question_mismatch' });
     }
   });
 
-  test('answer: no for a proposal the hub does not know and for a Safe that is not registered', async () => {
-    assert.deepEqual(await ask(answerer({ proposal: null }), SINGLE), { answer: 'no', reason: 'unknown_proposal' });
-    assert.deepEqual(await ask(answerer({ proposal: proposalFor(SINGLE), group: null }), SINGLE), { answer: 'no', reason: 'unknown_group' });
+  test('answer: invalid for a proposal the hub does not know and for a Safe that is not registered', async () => {
+    assert.deepEqual(await ask(answerer({ proposal: null }), SINGLE), { answer: 'invalid', reason: 'unknown_proposal' });
+    assert.deepEqual(await ask(answerer({ proposal: proposalFor(SINGLE), group: null }), SINGLE), { answer: 'invalid', reason: 'unknown_group' });
   });
 
-  test('answer: no when the plugin names another module, another network or holds no transactions', async () => {
+  test('answer: invalid when the plugin names another module, another network or holds no transactions', async () => {
     const otherModule = proposalFor(SINGLE);
     otherModule.plugins.safeSnap.safes[0].realityAddress = '0x0000000000000000000000000000000000000002';
-    assert.deepEqual(await ask(answerer({ proposal: otherModule }), SINGLE), { answer: 'no', reason: 'plugin_other_module' });
+    assert.deepEqual(await ask(answerer({ proposal: otherModule }), SINGLE), { answer: 'invalid', reason: 'plugin_other_module' });
 
     const otherNetwork = proposalFor(SINGLE);
     otherNetwork.plugins.safeSnap.safes[0].network = '1';
-    assert.deepEqual(await ask(answerer({ proposal: otherNetwork }), SINGLE), { answer: 'no', reason: 'plugin_other_module' });
+    assert.deepEqual(await ask(answerer({ proposal: otherNetwork }), SINGLE), { answer: 'invalid', reason: 'plugin_other_module' });
 
     const empty = proposalFor(SINGLE);
     empty.plugins.safeSnap.safes[0].txs = [[]];
-    assert.deepEqual(await ask(answerer({ proposal: empty }), SINGLE), { answer: 'no', reason: 'no_transactions' });
+    assert.deepEqual(await ask(answerer({ proposal: empty }), SINGLE), { answer: 'invalid', reason: 'no_transactions' });
 
     const noPlugin = proposalFor(SINGLE);
     noPlugin.plugins = {};
-    assert.deepEqual(await ask(answerer({ proposal: noPlugin }), SINGLE), { answer: 'no', reason: 'no_transactions' });
+    assert.deepEqual(await ask(answerer({ proposal: noPlugin }), SINGLE), { answer: 'invalid', reason: 'no_transactions' });
   });
 
   test('answer: the module match ignores address case, and a plugin given as JSON text is read', async () => {
@@ -200,7 +253,7 @@ describe('answer', () => {
     assert.equal((await ask(answerer({ proposal: p }), SINGLE)).answer, 'yes');
   });
 
-  test('answer: a malformed plugin transaction is bad_plugin, and the decision is no', () => {
+  test('answer: a malformed plugin transaction is bad_plugin', () => {
     const base = proposalFor(SINGLE).plugins;
     const tx = () => base.safeSnap.safes[0].txs[0][0];
     for (const [edit, label] of [

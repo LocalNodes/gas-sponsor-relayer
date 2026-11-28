@@ -175,6 +175,39 @@ describe('db-migration (unit)', () => {
     assert.equal(got.slots.length, 0);
   }));
 
+  test('db-migration: a questions table without the asking time or the question key opens with them, empty, and keeps its rows', () => inTempDir((dir) => {
+    const path = join(dir, 'relayer.db');
+    const bare = new DatabaseSync(path);
+    bare.exec(`CREATE TABLE questions (
+      chain_id INTEGER NOT NULL, question_id TEXT NOT NULL, module TEXT NOT NULL, safe TEXT NOT NULL, proposal_id TEXT NOT NULL,
+      question_hash TEXT NOT NULL, created_block TEXT NOT NULL, status TEXT NOT NULL, flagged INTEGER NOT NULL DEFAULT 0,
+      challenged_bond TEXT, challenge_nonce INTEGER, challenge_attempts INTEGER NOT NULL DEFAULT 0, escalated_bond TEXT,
+      created_at INTEGER NOT NULL, PRIMARY KEY (chain_id, question_id))`);
+    const qid = `0x${'aa'.repeat(32)}`;
+    bare.prepare("INSERT INTO questions (chain_id, question_id, module, safe, proposal_id, question_hash, created_block, status, created_at) VALUES (1, ?, ?, ?, 'p', 'h', '42', 'open', 1)")
+      .run(qid, `0x${'11'.repeat(20)}`, `0x${'22'.repeat(20)}`);
+    bare.close();
+    const db = openDb(path);
+    try {
+      const row = db.getWatched(1, qid);
+      assert.equal(row.createdBlock, 42n);
+      assert.equal(row.createdTs, null);
+      assert.equal(row.createdFinal, false);
+      db.updateWatched(1, qid, { createdFinal: true });
+      assert.equal(db.getWatched(1, qid).createdFinal, true);
+      db.updateWatched(1, qid, { createdTs: '1700000000' });
+      assert.equal(db.getWatched(1, qid).createdTs, 1_700_000_000n);
+      // No whole-question key either: empty until the question's log is read again.
+      assert.equal(row.questionKey, null);
+      db.updateWatched(1, qid, { questionKey: `0x${'cd'.repeat(32)}`, proposalId: '', questionHash: '' });
+      const read = db.getWatched(1, qid);
+      assert.equal(read.questionKey, `0x${'cd'.repeat(32)}`);
+      assert.equal(read.proposalId, '');
+    } finally {
+      db.close();
+    }
+  }));
+
   test('db-migration: a rebuild that fails at its first step throws and leaves the old table and its row', () => inTempDir((dir) => {
     // A table named creations_new is already there, so the rebuild cannot create its own.
     const path = oldFile(dir, { extra: 'CREATE TABLE creations_new (x INTEGER)' });
